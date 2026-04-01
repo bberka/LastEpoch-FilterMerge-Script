@@ -9,6 +9,7 @@ Merges build-specific loot filter XML files with a shared Core.xml.
 - Prefixes build-specific rule names with the build name
 - Orders all rules according to order_config.yaml
 - Reassigns Order values sequentially based on final position
+- Applies field overrides (color, isEnabled, emphasized, SoundId, etc.) from config
 """
 
 import argparse
@@ -24,7 +25,6 @@ except ImportError:
     print("PyYAML is required: pip install pyyaml --break-system-packages")
     sys.exit(1)
 
-NS = {"i": "http://www.w3.org/2001/XMLSchema-instance"}
 XMLNS_ATTR = 'xmlns:i="http://www.w3.org/2001/XMLSchema-instance"'
 
 
@@ -43,11 +43,6 @@ def get_name(rule: ET.Element) -> str:
     return (rule.findtext("nameOverride") or "").strip()
 
 
-def rule_fingerprint(rule: ET.Element) -> str:
-    """Canonical fingerprint for deduplication: just the nameOverride."""
-    return get_name(rule)
-
-
 def set_name(rule: ET.Element, new_name: str) -> None:
     node = rule.find("nameOverride")
     if node is not None:
@@ -60,30 +55,20 @@ def set_order(rule: ET.Element, value: int) -> None:
         node.text = str(value)
 
 
-def rule_to_xml_string(rule: ET.Element, indent: int = 4) -> str:
-    """Serialize a Rule element to an indented XML string."""
-    ET.indent(rule, space="  ")
-    raw = ET.tostring(rule, encoding="unicode", xml_declaration=False)
-    lines = raw.splitlines()
-    pad = " " * indent
-    return "\n".join(pad + line for line in lines)
-
-
 # ── Matching ──────────────────────────────────────────────────────────────────
 
 def matches(rule_name: str, pattern: str, mode: str) -> bool:
-    """Check if a rule name matches a section pattern."""
+    """Check if a rule name matches a pattern."""
     rn = rule_name.lower()
     pt = pattern.lower()
     if mode == "exact":
         return rn == pt
     if mode == "startswith":
         return rn.startswith(pt)
-    # default: contains
-    return pt in rn
+    return pt in rn  # contains (default)
 
 
-# ── Core rule deduplication ───────────────────────────────────────────────────
+# ── Stripping ─────────────────────────────────────────────────────────────────
 
 def build_core_name_set(core_rules: list[ET.Element]) -> set[str]:
     """Return the set of nameOverride values present in core (lowercased)."""
@@ -92,17 +77,39 @@ def build_core_name_set(core_rules: list[ET.Element]) -> set[str]:
 
 def strip_core_rules(build_rules: list[ET.Element], core_names: set[str]) -> list[ET.Element]:
     """Remove any rule from build_rules whose name matches a core rule name."""
-    kept = []
-    removed = []
+    kept, removed = [], []
     for r in build_rules:
-        name_lower = get_name(r).lower()
-        if name_lower in core_names:
+        if get_name(r).lower() in core_names:
             removed.append(get_name(r))
         else:
             kept.append(r)
     if removed:
         print(f"    Stripped {len(removed)} core rule(s): {removed}")
     return kept
+
+
+def strip_ignored_rules(
+    build_rules: list[ET.Element],
+    ignore_cfg: list[dict],
+) -> list[ET.Element]:
+    """Drop any build rule whose name matches an ignore entry."""
+    kept, removed = [], []
+    for r in build_rules:
+        name = get_name(r)
+        ignored = any(
+            matches(name, entry.get("match", ""), entry.get("match_mode", "contains"))
+            for entry in ignore_cfg
+        )
+        if ignored:
+            removed.append(name)
+        else:
+            kept.append(r)
+    if removed:
+        print(f"    Ignored {len(removed)} rule(s): {removed}")
+    return kept
+
+
+# ── Overrides ─────────────────────────────────────────────────────────────────
 
 def apply_overrides(
     rules: list[ET.Element],
@@ -128,13 +135,13 @@ def apply_overrides(
                 if node is None:
                     continue
 
-                # Auto-set recolor if color is being overridden
+                # Auto-set recolor to true when color is overridden
                 if field == "color":
                     recolor_node = rule.find("recolor")
                     if recolor_node is not None:
                         recolor_node.text = "true"
 
-                # Auto-set BeamOverride if beam fields are touched
+                # Auto-set BeamOverride to true when beam fields are touched
                 if field in ("BeamSizeOverride", "BeamColorOverride"):
                     beam_node = rule.find("BeamOverride")
                     if beam_node is not None:
@@ -145,27 +152,7 @@ def apply_overrides(
                     node.text = "true" if value else "false"
                 else:
                     node.text = str(value)
-                    
-def strip_ignored_rules(
-    build_rules: list[ET.Element],
-    ignore_cfg: list[dict],
-) -> list[ET.Element]:
-    """Drop any build rule whose name matches an ignore entry."""
-    kept = []
-    removed = []
-    for r in build_rules:
-        name = get_name(r)
-        ignored = any(
-            matches(name, entry.get("match", ""), entry.get("match_mode", "contains"))
-            for entry in ignore_cfg
-        )
-        if ignored:
-            removed.append(name)
-        else:
-            kept.append(r)
-    if removed:
-        print(f"    Ignored {len(removed)} rule(s): {removed}")
-    return kept
+
 
 # ── Section assignment ────────────────────────────────────────────────────────
 
@@ -174,9 +161,11 @@ def assign_rules_to_sections(
     core_rules: list[ET.Element],
     build_data: list[tuple[str, list[ET.Element]]],
     unmatched_cfg: dict,
+    overrides_cfg: list[dict],
 ) -> list[ET.Element]:
     """
     For each section in order, pick the matching rule(s) and collect them.
+    Applies overrides after placement.
     Returns flat ordered list of rules (not yet Order-numbered).
     """
 
@@ -194,7 +183,7 @@ def assign_rules_to_sections(
 
     def claim_build_rules(pattern: str, mode: str) -> list[tuple[str, ET.Element]]:
         """
-        For each build, find and remove the first rule matching pattern/mode.
+        For each build, find and remove all rules matching pattern/mode.
         Returns list of (build_name, rule_element) in build order.
         """
         claimed = []
@@ -209,14 +198,12 @@ def assign_rules_to_sections(
         return claimed
 
     result: list[ET.Element] = []
-    section_names = [s["name"] for s in sections]
 
-    # Determine insertion point for unmatched build rules
     unmatched_after_section = unmatched_cfg.get("after", None)
     unmatched_prefix = unmatched_cfg.get("prefix_build_name", True)
     unmatched_inserted = False
 
-    def flush_unmatched():
+    def flush_unmatched() -> None:
         nonlocal unmatched_inserted
         if unmatched_inserted:
             return
@@ -226,6 +213,7 @@ def assign_rules_to_sections(
                 rc = copy.deepcopy(r)
                 if unmatched_prefix:
                     set_name(rc, f"{bname} - {get_name(rc)}")
+                apply_overrides([rc], overrides_cfg, "build")
                 result.append(rc)
                 rules.remove(r)
 
@@ -237,7 +225,6 @@ def assign_rules_to_sections(
         sname = section["name"]
 
         if src == "core":
-            # Find the matching core rule
             matched = None
             for n, r in core_by_name.items():
                 if matches(n, pattern, mode):
@@ -245,6 +232,7 @@ def assign_rules_to_sections(
                     break
             if matched is not None:
                 rc = copy.deepcopy(matched)
+                apply_overrides([rc], overrides_cfg, "core")
                 result.append(rc)
             else:
                 print(f"  [WARN] Core section '{sname}' matched no rule (pattern='{pattern}')")
@@ -259,13 +247,12 @@ def assign_rules_to_sections(
                     original_name = get_name(rc)
                     if not original_name.startswith(bname):
                         set_name(rc, f"{bname} - {original_name}")
+                apply_overrides([rc], overrides_cfg, "build")
                 result.append(rc)
 
-        # After this section, flush unmatched if configured
         if unmatched_after_section and sname == unmatched_after_section:
             flush_unmatched()
 
-    # If unmatched flush was never triggered, append at end
     flush_unmatched()
 
     return result
@@ -281,8 +268,6 @@ def build_output_xml(
     icon_color: int,
 ) -> str:
     """Reassign Order values and serialize to XML string."""
-
-    # Order values: highest = first in list (game evaluates highest Order first)
     total = len(ordered_rules)
     for i, rule in enumerate(ordered_rules):
         set_order(rule, total - 1 - i)
@@ -302,7 +287,6 @@ def build_output_xml(
     for rule in ordered_rules:
         ET.indent(rule, space="  ")
         rule_xml = ET.tostring(rule, encoding="unicode")
-        # Indent each line by 4 spaces to sit inside <rules>
         for line in rule_xml.splitlines():
             lines.append("    " + line)
 
@@ -332,16 +316,17 @@ def main():
     args = parser.parse_args()
 
     # ── Load config
-    config_path = args.config
-    if not os.path.exists(config_path):
-        print(f"[ERROR] Config file not found: {config_path}")
+    if not os.path.exists(args.config):
+        print(f"[ERROR] Config file not found: {args.config}")
         sys.exit(1)
-    with open(config_path, "r", encoding="utf-8") as f:
+    with open(args.config, "r", encoding="utf-8") as f:
         config = yaml.safe_load(f)
 
     sections = config.get("sections", [])
     output_cfg = config.get("output", {})
     unmatched_cfg = config.get("unmatched_build_rules", {"placement": "after", "after": None})
+    ignore_cfg = config.get("ignore_build_rules", [])
+    overrides_cfg = config.get("overrides", [])
 
     # ── Load core
     if not os.path.exists(args.core):
@@ -353,21 +338,19 @@ def main():
     core_names = build_core_name_set(core_rules)
 
     # ── Load build files
-    builds_dir = args.builds
-    if not os.path.isdir(builds_dir):
-        print(f"[ERROR] Builds directory not found: {builds_dir}")
+    if not os.path.isdir(args.builds):
+        print(f"[ERROR] Builds directory not found: {args.builds}")
         sys.exit(1)
 
     build_files = sorted(
-        p for p in Path(builds_dir).iterdir()
+        p for p in Path(args.builds).iterdir()
         if p.suffix.lower() == ".xml"
     )
     if not build_files:
-        print(f"[ERROR] No XML files found in: {builds_dir}")
+        print(f"[ERROR] No XML files found in: {args.builds}")
         sys.exit(1)
 
     build_data: list[tuple[str, list[ET.Element]]] = []
-    ignore_cfg = config.get("ignore_build_rules", [])
     build_names: list[str] = []
     for bf in build_files:
         print(f"Loading build: {bf.name}")
@@ -386,20 +369,20 @@ def main():
     icon = output_cfg.get("filter_icon", 0)
     icon_color = output_cfg.get("filter_icon_color", 0)
 
-    # ── Assign rules to sections and produce ordered list
+    # ── Assign rules to sections and apply overrides
     print("\nAssigning rules to sections...")
-    ordered_rules = assign_rules_to_sections(sections, core_rules, build_data, unmatched_cfg)
+    ordered_rules = assign_rules_to_sections(
+        sections, core_rules, build_data, unmatched_cfg, overrides_cfg
+    )
     print(f"\nTotal rules in merged filter: {len(ordered_rules)}")
 
-    # ── Serialize
+    # ── Serialize and write
     xml_out = build_output_xml(ordered_rules, filter_name, description, icon, icon_color)
-
-    out_path = args.output
-    with open(out_path, "w", encoding="utf-8") as f:
+    with open(args.output, "w", encoding="utf-8") as f:
         f.write(xml_out)
-    print(f"\nMerged filter written to: {out_path}")
+    print(f"\nMerged filter written to: {args.output}")
 
-    # ── Print summary of final rule order
+    # ── Print summary
     print("\n── Final rule order (highest priority first) ──")
     for i, r in enumerate(ordered_rules):
         print(f"  {len(ordered_rules) - 1 - i:>3}  {get_name(r)}")

@@ -1,259 +1,116 @@
 # Last Epoch Loot Filter Merger
 
-A Python script that merges multiple build-specific loot filters with a shared core filter into a single valid Last Epoch `.xml` filter file. Rule ordering, deduplication, naming, and field overrides are all controlled via a YAML config file.
+This tool combines multiple build-specific loot filters (downloaded from Maxroll) with a shared "core" filter into a single `.xml` file you can load directly in Last Epoch. Instead of switching filters every time you swap builds, you get one filter that covers all of them.
 
 ---
 
-## Requirements
+## What You Need
 
-- Python 3.10+
-- PyYAML
+- **Python 3.10 or newer** — download from [python.org](https://www.python.org/downloads/)
+- **PyYAML** — a small Python library. Install it by opening a terminal and running:
 
-```bash
-pip install pyyaml --break-system-packages
+```
+pip install pyyaml
 ```
 
 ---
 
-## File Structure
+## Setting Up Your Files
+
+Organize your files like this:
 
 ```
-merge_filters.py       # The merger script
-config.yaml      # Ordering, ignore, and override configuration
-Core.xml               # Shared rules used across all builds
+merge_filters.py       ← the script (this tool)
+config.yaml            ← controls rule order and settings
+Core.xml               ← rules shared across all your builds
 builds/
-    Shadow_Rend_Bladedancer.xml
-    Lightning_Blast_Runemaster.xml
-    Fire_Aura_Spellblade.xml
+    Build One.xml
+    Build Two.xml
+    Build Three.xml
     ...
 ```
 
----
+**Core.xml** — This is your "base" filter containing rules that apply to every build: currency, runes, glyphs, universal loot tiers, etc. These rules appear once in the final filter no matter how many builds you have.
 
-## Usage
+**builds/ folder** — Put one `.xml` file per build here. Download each from Maxroll, rename them however you like. The script reads the actual filter name from inside the file.
 
-```bash
-python merge_filters.py \
-    --builds ./builds \
-    --core Core.xml \
-    --config config.yaml \
-    --output merged_filter.xml
-```
-
-| Argument | Required | Default | Description |
-|---|---|---|---|
-| `--builds` | Yes | — | Directory containing build XML files |
-| `--core` | Yes | — | Path to Core.xml |
-| `--config` | No | `config.yaml` | Path to the order config |
-| `--output` | No | `merged_filter.xml` | Output file path |
+**config.yaml** — Controls the order rules appear in the final filter. See the [example folder](example/) for ready-to-use configs at different strictness levels (Regular, Strict, Very Strict, Uber Strict). Copy the one closest to what you want and adjust it.
 
 ---
 
-## How It Works
+## Running the Script
 
-### Build Files
+Open a terminal in the same folder as `merge_filters.py` and run:
 
-Build files are downloaded from Maxroll and placed in the builds directory. They can be either:
+```
+python merge_filters.py --builds ./builds --core Core.xml --config config.yaml --output merged_filter.xml
+```
 
-- **Raw Maxroll downloads** — the script automatically strips any rule whose name matches a rule already present in `Core.xml`
-- **Pre-trimmed files** — with shared rules already removed, these pass through stripping unchanged
+That's it. The script will create `merged_filter.xml` in the same folder.
 
-The build name used for rule prefixing is read from the `<n>` tag inside the XML, not the filename.
+### What the options mean
 
-### Core File
-
-`Core.xml` contains all rules shared across every build — currency, runes, glyphs, omen idols, leveling uniques, LP tiers, exalted rules, etc. These rules appear exactly once in the merged output regardless of how many build files also contain them.
-
-### Merging & Ordering
-
-Rules are placed into the output in the order sections appear in `config.yaml`. Sections with `source: core` pull a single rule from `Core.xml`. Sections with `source: build` pull one matching rule from each build file and group them together. The game evaluates rules from highest `Order` value to lowest — the script reassigns all `Order` values sequentially so the YAML position is the only thing you need to think about.
+| Option | Required | What it does |
+| ------ | -------- | ------------ |
+| `--builds` | Yes | Path to the folder with your build `.xml` files |
+| `--core` | Yes | Path to your shared core filter |
+| `--config` | No | Path to your config file (default: `config.yaml`) |
+| `--output` | No | Name/path for the output file (default: `merged_filter.xml`) |
 
 ---
 
-## config.yaml
+## Using the Merged Filter in Last Epoch
 
-### `output`
-
-Controls the merged filter's metadata.
-
-```yaml
-output:
-  name_template: "All Builds - {builds}"   # {builds} expands to comma-separated build names
-  description: "Merged multi-build filter"
-  filter_icon: 0
-  filter_icon_color: 0
-```
+1. Copy `merged_filter.xml` into your Last Epoch filters folder:
+   - Windows: `%appdata%\..\LocalLow\Eleventh Hour Games\Last Epoch\Filters`
+2. Open the game, go to **Settings → Loot Filter**, and select the merged filter.
 
 ---
 
-### `sections`
+## What Happens When You Run It
 
-The heart of the config. Each entry is a slot in the final filter. **Order in this list = order in the game.**
+The script:
 
-```yaml
-sections:
-  - name: "All Items"          # Human-readable label, also used by unmatched_build_rules
-    source: core               # "core" or "build"
-    match: "All Items"         # Pattern matched against the rule's nameOverride
-    match_mode: exact          # "exact", "startswith", or "contains"
-    prefix_build_name: true    # Prepend "BuildName - " to the rule name (build rules only)
-```
+1. Loads your `Core.xml` and all build files in the builds folder
+2. Removes duplicate rules — if a build file already contains a rule that's in Core.xml, the duplicate is dropped so it only appears once
+3. Puts all rules in the order defined by your `config.yaml`
+4. Writes a single clean `.xml` filter file
 
-#### `source`
-
-| Value | Behaviour |
-|---|---|
-| `core` | Takes the matching rule from `Core.xml` once |
-| `build` | Takes the matching rule from each build file and inserts them grouped together |
-
-#### `match_mode`
-
-| Value | Behaviour |
-|---|---|
-| `exact` | Full name must match exactly (case-insensitive) |
-| `startswith` | Name must begin with the pattern |
-| `contains` | Name must contain the pattern (default) |
-
-#### `prefix_build_name`
-
-When `true` (default for build rules), the build name is prepended to the rule name in the output:
-
-```
-Shatter / Removal / Important Affixes (Edit Affixes)
-→ Shadow Rend Bladedancer - Shatter / Removal / Important Affixes (Edit Affixes)
-```
-
----
-
-### `unmatched_build_rules`
-
-Any build rule not claimed by any section is collected here instead of being silently dropped.
-
-```yaml
-unmatched_build_rules:
-  placement: after
-  after: "Uniques From Planner 1 LP"   # Section name to insert after
-  prefix_build_name: true
-```
-
----
-
-### `ignore_build_rules`
-
-Rules matching any entry here are silently dropped from build files during loading and will never appear in the output. Uses the same `match` / `match_mode` system as sections.
-
-```yaml
-ignore_build_rules:
-  - match: "Some Rule I Never Want"
-    match_mode: exact
-  - match: "Tier 7 Strict"
-    match_mode: startswith
-  - match: "old experimental"
-    match_mode: contains
-```
-
----
-
-### `overrides`
-
-Overrides let you change specific XML fields on rules after they are placed, without editing the source files. Useful for standardizing visual presentation across builds — colors, sounds, beams, enabled state, etc.
-
-```yaml
-overrides:
-  - match: "Shatter / Removal / Important Affixes"
-    match_mode: contains
-    source: build        # "core", "build", or "any"
-    set:
-      color: 9
-      isEnabled: false
-      emphasized: true
-      SoundId: 4
-      BeamSizeOverride: VERYLARGE
-      BeamColorOverride: 12
-```
-
-#### Overridable fields
-
-| Field | Type | Notes |
-|---|---|---|
-| `color` | integer | Setting this automatically sets `recolor` to `true` |
-| `isEnabled` | boolean | |
-| `emphasized` | boolean | |
-| `SoundId` | integer | |
-| `MapIconId` | integer | |
-| `BeamSizeOverride` | string | e.g. `NONE`, `SMALL`, `MEDIUM`, `LARGE`, `VERYLARGE` — setting this automatically sets `BeamOverride` to `true` |
-| `BeamColorOverride` | integer | Setting this automatically sets `BeamOverride` to `true` |
-
-The `source` field scopes the override so it only applies to rules of that origin:
-
-| Value | Applies to |
-|---|---|
-| `build` | Build-specific rules only |
-| `core` | Core rules only |
-| `any` | All rules (default) |
+The console will print a summary showing which rules were loaded, which duplicates were removed, and the final rule order.
 
 ---
 
 ## Adding a New Build
 
-1. Download the filter from Maxroll and place the `.xml` file in the builds directory
-2. Run the script — shared rules are stripped automatically
-3. Add any new build-specific rule names to `config.yaml` if they don't match an existing section
+1. Download the filter `.xml` from Maxroll
+2. Drop it in your builds folder
+3. Run the script again
+
+Duplicate rules are handled automatically. If the new build has rules that don't match any section in `config.yaml`, they'll be placed in a catch-all group at the position defined by `unmatched_build_rules` in your config.
 
 ---
 
-## Adding a Custom Rule
+## Choosing a Strictness Level
 
-Create the rule in the appropriate source file (`Core.xml` for shared rules, or a build file for build-specific rules), then add a matching section entry to `config.yaml` at the position you want it to appear.
+The [example/](example/) folder contains four ready-made configs:
 
-Example — a custom rule called `Generic Havoc` that should appear above all `Shatter` rules:
+| File | Who it's for |
+| ---- | ------------ |
+| `config_Regular.yaml` | Casual / early game — shows most loot |
+| `config_Strict.yaml` | Mid-game — hides low-tier drops |
+| `config_VeryStrict.yaml` | Late game — only relevant items show |
+| `config_UberStrict.yaml` | Endgame farming — shows only top-tier loot |
 
-```yaml
-  - name: "Generic Havoc"
-    source: build
-    match: "Generic Havoc"
-    match_mode: exact
-    prefix_build_name: true
-
-  - name: "Shatter / Removal / Important Affixes"
-    source: build
-    match: "Shatter / Removal / Important Affixes"
-    match_mode: contains
-    prefix_build_name: true
-```
+Copy whichever one fits your situation and pass it with `--config`.
 
 ---
 
-## Console Output
+## Troubleshooting
 
-The script prints a full summary on every run:
+**The script won't start** — Make sure Python is installed and accessible. Run `python --version` in your terminal. If it's not found, reinstall Python and check "Add to PATH" during setup.
 
-```
-Loading core: Core.xml
-  26 core rules loaded
-Loading build: Shadow_Rend_Bladedancer.xml
-  16 rules before stripping
-  16 build-specific rules remaining
-Loading build: Lightning_Blast_Runemaster.xml
-  38 rules before stripping
-    Stripped 26 core rule(s): [...]
-  12 build-specific rules remaining
+**My filter doesn't show up in-game** — Make sure the file is in the correct Filters folder and has a `.xml` extension (not `.xml.txt`).
 
-Assigning rules to sections...
-  [INFO] Build section 'Strict - Weaver Idols' matched no rules in any build
+**A rule is missing from the output** — Check the console output when running the script. Lines marked `[WARN]` or `[INFO]` tell you when a rule from your config matched nothing in your files.
 
-Total rules in merged filter: 87
-
-── Final rule order (highest priority first) ──
-   86  All Items
-   85  Important Runes
-   ...
-    0  S Tier & Extremely Rare Uniques
-
-Merged filter written to: merged_filter.xml
-```
-
-- `[WARN]` — a core section matched no rule in `Core.xml` (likely a typo in the config)
-- `[INFO]` — a build section matched no rules in any build (normal if not all builds have that rule type)
-- `Stripped` — rules removed because they duplicate a core rule
-- `Ignored` — rules removed because they matched an `ignore_build_rules` entry
+**I want to understand the config in detail** — See [TECHNICAL.md](TECHNICAL.md) for a full reference.

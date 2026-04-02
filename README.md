@@ -19,7 +19,7 @@ pip install pyyaml --break-system-packages
 
 ```
 merge_filters.py       # The merger script
-order_config.yaml      # Ordering, ignore, and override configuration
+config.yaml      # Ordering, ignore, and override configuration
 Core.xml               # Shared rules used across all builds
 builds/
     Shadow_Rend_Bladedancer.xml
@@ -36,7 +36,7 @@ builds/
 python merge_filters.py \
     --builds ./builds \
     --core Core.xml \
-    --config order_config.yaml \
+    --config config.yaml \
     --output merged_filter.xml
 ```
 
@@ -44,7 +44,7 @@ python merge_filters.py \
 |---|---|---|---|
 | `--builds` | Yes | — | Directory containing build XML files |
 | `--core` | Yes | — | Path to Core.xml |
-| `--config` | No | `order_config.yaml` | Path to the order config |
+| `--config` | No | `config.yaml` | Path to the order config |
 | `--output` | No | `merged_filter.xml` | Output file path |
 
 ---
@@ -66,11 +66,11 @@ The build name used for rule prefixing is read from the `<n>` tag inside the XML
 
 ### Merging & Ordering
 
-Rules are placed into the output in the order sections appear in `order_config.yaml`. Sections with `source: core` pull a single rule from `Core.xml`. Sections with `source: build` pull one matching rule from each build file and group them together. The game evaluates rules from highest `Order` value to lowest — the script reassigns all `Order` values sequentially so the YAML position is the only thing you need to think about.
+Rules are placed into the output in the order sections appear in `config.yaml`. Sections with `source: core` pull a single rule from `Core.xml`. Sections with `source: build` pull one matching rule from each build file and group them together. The game evaluates rules from highest `Order` value to lowest — the script reassigns all `Order` values sequentially so the YAML position is the only thing you need to think about.
 
 ---
 
-## order_config.yaml
+## config.yaml
 
 ### `output`
 
@@ -198,13 +198,13 @@ The `source` field scopes the override so it only applies to rules of that origi
 
 1. Download the filter from Maxroll and place the `.xml` file in the builds directory
 2. Run the script — shared rules are stripped automatically
-3. Add any new build-specific rule names to `order_config.yaml` if they don't match an existing section
+3. Add any new build-specific rule names to `config.yaml` if they don't match an existing section
 
 ---
 
 ## Adding a Custom Rule
 
-Create the rule in the appropriate source file (`Core.xml` for shared rules, or a build file for build-specific rules), then add a matching section entry to `order_config.yaml` at the position you want it to appear.
+Create the rule in the appropriate source file (`Core.xml` for shared rules, or a build file for build-specific rules), then add a matching section entry to `config.yaml` at the position you want it to appear.
 
 Example — a custom rule called `Generic Havoc` that should appear above all `Shatter` rules:
 

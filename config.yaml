@@ -1,36 +1,88 @@
 # Last Epoch Loot Filter Merger - Order Configuration
 #
-# Compatible with: Core-Very-Strict.xml (38 rules) and Core-Uber-Strict.xml (29 rules)
+# Compatible with: Core-Very-Strict.xml (38 rules) and Core-Uber-Strict.xml (30 rules)
 #
-# Rules present only in Very Strict are included — they will simply be skipped
-# (no match found) when merging against the Uber Strict core, causing no errors.
+# VS core  : All Set Items, Rare Set Items, Unique Items, Weaver's Will Items,
+#            All Legendary Items, Unique Idols, Dungeons/Arena Uniques,
+#            Rare Dungeon/Monolith Drops, Harbinger Uniques — present
+# Uber core: Above rules absent; has Harbinger's Needle instead of Harbinger Uniques
 #
-# Rules present only in Uber Strict:
-#   - "Harbinger's Needle" — VS uses "Harbinger Uniques" instead; both are listed
-#     in the same section slot via contains matching so either core works correctly.
+# Build files may carry rules from the opposite core variant (e.g. Warpath built for Uber).
+# These are listed in ignore_build_rules so they are silently dropped.
 #
-# HOW SECTIONS WORK:
-#   "source" : "core" or "build"
-#   "match"  : matched against the rule's nameOverride (case-insensitive)
-#   "match_mode":
-#     - "exact"      : full name must match exactly
-#     - "startswith" : name starts with this string
-#     - "contains"   : name contains this string
-#   "prefix_build_name": prepend "BuildName - " to rule names
+# TRANSFORMS (run before section assignment):
+#   Source rule: "Wanted Tier 7 (Can Edit Affixes & Item Type)" in each build
 #
-# SECTION ORDER:
-#   Sections listed first get the highest Order values (evaluated first by the game).
-#   Within a "build" section, builds are inserted in the order their files are found.
+#   MUTATE → "Wanted Tier 7 - Non Corrupt"
+#     - AffixCondition.combinedComparsionValue: 1 → 7
+#     - Adds RarityCondition: EXALTED
+#     - Adds CorruptionCondition: OnlyUncorrupted
 #
-# UNMATCHED RULES:
-#   Build rules not matched by any section go to the "unmatched_build_rules" position.
-#   Core rules not matched by any section are always included as-is after all sections.
+#   DERIVE → "Wanted Havoc" (disabled by default, same affix list)
+#     - Derived from the already-mutated Non Corrupt rule
+#     - AffixCondition.advanced: true → false  (presence check, any tier)
+#     - Injects second AffixCondition: empty affixes, T7 any, combinedValue=15
+#       (gates on total T7 count leaving room to craft with Rune of Havoc)
+#     - Adds RarityCondition: EXALTED
+#     - Adds CorruptionCondition: OnlyUncorrupted
+#     - color: 7 → 16, isEnabled: false
 
 output:
   name_template: "All Builds - {builds}"
   description: "Merged multi-build filter"
   filter_icon: 0
   filter_icon_color: 0
+
+# ── TRANSFORMS ────────────────────────────────────────────────────────────────
+
+transforms:
+
+# Step 1 — mutate "Wanted Tier 7" → "Wanted Tier 7 - Non Corrupt"
+- match: "Wanted Tier 7 (Can Edit Affixes & Item Type)"
+  match_mode: exact
+  operation: mutate
+  name_replace: "Wanted Tier 7 (Can Edit Affixes & Item Type)"
+  name_with: "Wanted Tier 7 - Non Corrupt (Can Edit Affixes & Item Type)"
+  condition_patches:
+  - type: AffixCondition
+    index: 0
+    set:
+      combinedComparsionValue: "7"
+  - type: RarityCondition
+    inject_xml: >-
+      <Condition xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                 xsi:type="RarityCondition"><rarity>EXALTED</rarity></Condition>
+  - type: CorruptionCondition
+    inject_xml: >-
+      <Condition xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                 xsi:type="CorruptionCondition"><Corruption>OnlyUncorrupted</Corruption></Condition>
+
+# Step 2 — derive "Wanted Havoc" from the now-mutated rule
+- match: "Wanted Tier 7 - Non Corrupt (Can Edit Affixes & Item Type)"
+  match_mode: exact
+  operation: derive
+  name_replace: "Wanted Tier 7 - Non Corrupt"
+  name_with: "Wanted Havoc"
+  set:
+    color: "16"
+    isEnabled: "false"
+  condition_patches:
+  - type: AffixCondition
+    index: 0
+    set:
+      advanced: "false"
+  - type: AffixCondition
+    inject_xml: >-
+      <Condition xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                 xsi:type="AffixCondition">
+        <affixes />
+        <comparsion>MORE_OR_EQUAL</comparsion>
+        <comparsionValue>7</comparsionValue>
+        <minOnTheSameItem>1</minOnTheSameItem>
+        <combinedComparsion>ANY</combinedComparsion>
+        <combinedComparsionValue>15</combinedComparsionValue>
+        <advanced>true</advanced>
+      </Condition>
 
 sections:
 
@@ -127,17 +179,17 @@ sections:
   match_mode: exact
   prefix_build_name: true
 
-# ── SHATTER / CRAFTING AFFIXES (per-build) ─────────────────────────────────
+# ── SHATTER / CRAFTING AFFIXES (per-build, disabled by default) ────────────
 - name: "Shatter / Removal / Important Affixes"
   source: build
   match: "Shatter / Removal / Important Affixes"
   match_mode: contains
   prefix_build_name: true
 
-# ── GENERIC HAVOC (custom core rule, VS only — skipped silently on Uber) ───
-- name: "Generic Havoc"
+# ── GENERIC HAVOC (custom core rule — present in both VS and Uber) ─────────
+- name: "Generic Havoc (Can Edit Item Type)"
   source: core
-  match: "Generic Havoc"
+  match: "Generic Havoc (Can Edit Item Type)"
   match_mode: exact
 
 # ── WANTED EXPERIMENTALS (per-build) ───────────────────────────────────────
@@ -145,6 +197,28 @@ sections:
   source: build
   match: "Wanted Experimental"
   match_mode: contains
+  prefix_build_name: true
+
+# ── BUILD-SPECIFIC WANTED HAVOC (derived, disabled by default) ─────────────
+- name: "Wanted Havoc"
+  source: build
+  match: "Wanted Havoc"
+  match_mode: contains
+  prefix_build_name: true
+
+# ── BUILD-SPECIFIC WANTED TIER 7 - NON CORRUPT (mutated from Wanted Tier 7) ─
+- name: "Wanted Tier 7 - Non Corrupt"
+  source: build
+  match: "Wanted Tier 7 - Non Corrupt"
+  match_mode: contains
+  prefix_build_name: true
+
+# ── BUILD-SPECIFIC STRICT TIER 7 ITEM RULES ───────────────────────────────
+# Varies per build (Helmet, Body Armor, Belt, Gloves, Ring, Relic, Idol Altar, etc.)
+- name: "Tier 7 Strict (build-specific)"
+  source: build
+  match: "Tier 7 Strict"
+  match_mode: startswith
   prefix_build_name: true
 
 # ── CORE TIER 7 SPECIFIC BASES ─────────────────────────────────────────────
@@ -163,13 +237,12 @@ sections:
   match: "Tier 7 Rings & Amulets"
   match_mode: exact
 
-# ── VS-ONLY: SPECIAL ITEM CATCH-ALLS (absent in Uber Strict) ──────────────
+# ── CORE ITEM CATCH-ALLS (VS only — absent in Uber Strict, skipped silently) ─
 - name: "All Set Items"
   source: core
   match: "All Set Items"
   match_mode: exact
 
-# ── VS-ONLY: SPECIAL ITEM CATCH-ALLS (absent in Uber Strict) ──────────────
 - name: "Rare Set Items"
   source: core
   match: "Rare Set Items"
@@ -196,12 +269,13 @@ sections:
   match: "Primordial Uniques"
   match_mode: exact
 
+# VS and Uber both have "All Legendary Items" — no unnamed rule in either
 - name: "All Legendary Items"
   source: core
   match: "All Legendary Items"
   match_mode: exact
 
-# ── VS-ONLY: UNIQUE IDOLS (absent in Uber Strict) ─────────────────────────
+# ── CORE UNIQUE IDOLS (VS only — absent in Uber Strict) ───────────────────
 - name: "Unique Idols"
   source: core
   match: "Unique Idols"
@@ -212,21 +286,6 @@ sections:
   source: core
   match: "Generic Good Altars (Min. Tier 7)"
   match_mode: exact
-
-# ── BUILD-SPECIFIC WANTED TIER 7 ──────────────────────────────────────────
-- name: "Wanted Tier 7"
-  source: build
-  match: "Wanted Tier 7"
-  match_mode: contains
-  prefix_build_name: true
-
-# ── BUILD-SPECIFIC STRICT TIER 7 ITEM RULES ───────────────────────────────
-# Varies per build (Helmet, Body Armor, Belt, Gloves, Ring, Relic, Idol Altar, etc.)
-- name: "Tier 7 Strict (build-specific)"
-  source: build
-  match: "Tier 7 Strict"
-  match_mode: startswith
-  prefix_build_name: true
 
 # ── CORE MULTI-EXALTED RULES ───────────────────────────────────────────────
 - name: "Multi Exalted (Min. Tier 7 & Tier 6)"
@@ -249,7 +308,7 @@ sections:
   match: "Corrupted Multi Exalted"
   match_mode: contains
 
-# ── VS-ONLY: DUNGEON / BOSS DROPS (absent in Uber Strict) ─────────────────
+# ── CORE DUNGEON / BOSS DROPS (VS only — absent in Uber Strict) ───────────
 - name: "Dungeons / Arena Uniques"
   source: core
   match: "Dungeons / Arena Uniques"
@@ -266,7 +325,7 @@ sections:
   match: "Uniques With 2 LP (70+ LPL)"
   match_mode: exact
 
-# ── VS-ONLY: RARE DROP SOURCES (absent in Uber Strict) ────────────────────
+# ── CORE RARE DROP SOURCES (VS only — absent in Uber Strict) ──────────────
 - name: "Rare Dungeon Drops"
   source: core
   match: "Rare Dungeon Drops"
@@ -277,8 +336,8 @@ sections:
   match: "Rare Monolith Timeline Boss Drops"
   match_mode: exact
 
-# ── HARBINGER UNIQUES (VS: "Harbinger Uniques" / Uber: "Harbinger's Needle") ──
-# contains "Harbinger" matches both names — only one will exist in any given core.
+# ── HARBINGER (VS: "Harbinger Uniques" / Uber: "Harbinger's Needle") ───────
+# contains "Harbinger" matches both names — only one will exist per core variant
 - name: "Harbinger Uniques"
   source: core
   match: "Harbinger"
@@ -344,14 +403,16 @@ unmatched_build_rules:
   after: "Uniques From Planner 1 LP"
   prefix_build_name: true
 
+# Rules that may appear in build XML files but belong to a different core variant.
+# Dropped silently so only the core version is used.
 ignore_build_rules:
+# Unnamed rules (empty nameOverride) in build files are never build-specific
 - match: ""
   match_mode: exact
-  source: build
 
 overrides:
 - match: "Shatter / Removal / Important Affixes"
   match_mode: contains
   source: build
   set:
-    isEnabled: false
+    isEnabled: "false"

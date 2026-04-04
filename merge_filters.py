@@ -10,6 +10,7 @@ Merges build-specific loot filter XML files with a shared Core.xml.
 - Orders all rules according to order_config.yaml
 - Reassigns Order values sequentially based on final position
 - Applies field overrides (color, isEnabled, emphasized, SoundId, etc.) from config
+- Applies transforms: mutate existing rules or derive new sibling rules from them
 """
 
 import argparse
@@ -26,6 +27,9 @@ except ImportError:
     sys.exit(1)
 
 XMLNS_ATTR = 'xmlns:i="http://www.w3.org/2001/XMLSchema-instance"'
+
+CONDITION_XMLNS = 'http://www.w3.org/2001/XMLSchema-instance'
+XSI_TYPE = f'{{{CONDITION_XMLNS}}}type'
 
 
 # ── XML helpers ───────────────────────────────────────────────────────────────
@@ -53,6 +57,15 @@ def set_order(rule: ET.Element, value: int) -> None:
     node = rule.find("Order")
     if node is not None:
         node.text = str(value)
+
+
+def set_field(rule: ET.Element, field: str, value) -> None:
+    node = rule.find(field)
+    if node is not None:
+        if isinstance(value, bool):
+            node.text = "true" if value else "false"
+        else:
+            node.text = str(value)
 
 
 # ── Matching ──────────────────────────────────────────────────────────────────
@@ -109,6 +122,143 @@ def strip_ignored_rules(
     return kept
 
 
+# ── Transforms ────────────────────────────────────────────────────────────────
+
+def _apply_condition_patches(conditions_node: ET.Element, patches: list[dict]) -> None:
+    """
+    Apply a list of condition patch operations to a <conditions> element.
+
+    Each patch entry is a dict with:
+      type        : condition type string, e.g. "AffixCondition"
+      index       : which occurrence to target (0-based, default 0)
+      set         : dict of field -> value to set on child elements
+      inject_xml  : raw XML string of a new <Condition> element to append
+      remove      : if true, remove this condition entirely
+    """
+    for patch in patches:
+        ctype = patch.get("type")
+        index = patch.get("index", 0)
+        set_fields = patch.get("set", {})
+        inject_xml = patch.get("inject_xml")
+        remove = patch.get("remove", False)
+
+        # Collect all conditions matching this type
+        matching = [
+            c for c in conditions_node
+            if c.get(XSI_TYPE, "").split("}")[-1] == ctype
+               or c.get(XSI_TYPE, "") == ctype
+        ]
+
+        if remove:
+            if index < len(matching):
+                conditions_node.remove(matching[index])
+            continue
+
+        if set_fields and index < len(matching):
+            target = matching[index]
+            for field, value in set_fields.items():
+                node = target.find(field)
+                if node is not None:
+                    if isinstance(value, bool):
+                        node.text = "true" if value else "false"
+                    else:
+                        node.text = str(value)
+
+        if inject_xml:
+            # Register xsi namespace so it survives parse
+            ET.register_namespace("xsi", CONDITION_XMLNS)
+            new_cond = ET.fromstring(inject_xml)
+            conditions_node.append(new_cond)
+
+
+def apply_transforms(
+    build_data: list[tuple[str, list[ET.Element]]],
+    transforms_cfg: list[dict],
+) -> None:
+    """
+    Process all transform entries against all build rule lists in-place.
+
+    Each transform entry:
+      match            : pattern to match against nameOverride
+      match_mode       : exact / startswith / contains (default contains)
+      operation        : "mutate" or "derive"
+      name_replace     : for derive — replace this substring in the name
+      name_with        : for derive — replace with this substring
+      set              : top-level field overrides (same as overrides.set)
+      condition_patches: list of condition patch dicts (see _apply_condition_patches)
+    """
+    for transform in transforms_cfg:
+        pattern = transform.get("match", "")
+        mode = transform.get("match_mode", "contains")
+        operation = transform.get("operation", "mutate")
+        name_replace = transform.get("name_replace", "")
+        name_with = transform.get("name_with", "")
+        set_fields = transform.get("set", {})
+        cond_patches = transform.get("condition_patches", [])
+
+        for bname, rules in build_data:
+            insertions = []  # (index, new_rule) for derive operations
+
+            for i, rule in enumerate(rules):
+                if not matches(get_name(rule), pattern, mode):
+                    continue
+
+                if operation == "mutate":
+                    # Modify the rule directly
+                    target = rule
+                    _patch_rule(target, name_replace, name_with, set_fields, cond_patches)
+                    print(f"    Transform mutate: '{get_name(target)}' in build '{bname}'")
+
+                elif operation == "derive":
+                    # Create a deep copy, patch the copy, insert it after the source
+                    derived = copy.deepcopy(rule)
+                    _patch_rule(derived, name_replace, name_with, set_fields, cond_patches)
+                    insertions.append((i + 1, derived))
+                    print(f"    Transform derive: '{get_name(derived)}' from '{get_name(rule)}' in build '{bname}'")
+
+            # Insert derived rules in reverse order so indices remain valid
+            for idx, new_rule in reversed(insertions):
+                rules.insert(idx, new_rule)
+
+
+def _patch_rule(
+    rule: ET.Element,
+    name_replace: str,
+    name_with: str,
+    set_fields: dict,
+    cond_patches: list[dict],
+) -> None:
+    """Apply name replacement, field overrides, and condition patches to a rule."""
+    # Name replacement
+    if name_replace:
+        old_name = get_name(rule)
+        new_name = old_name.replace(name_replace, name_with)
+        set_name(rule, new_name)
+
+    # Top-level field overrides
+    for field, value in set_fields.items():
+        node = rule.find(field)
+        if node is not None:
+            if field == "color":
+                recolor = rule.find("recolor")
+                if recolor is not None:
+                    recolor.text = "true"
+            if field in ("BeamSizeOverride", "BeamColorOverride"):
+                beam = rule.find("BeamOverride")
+                if beam is not None:
+                    beam.text = "true"
+            if isinstance(value, bool):
+                node.text = "true" if value else "false"
+            else:
+                node.text = str(value)
+
+    # Condition patches
+    if cond_patches:
+        conditions = rule.find("conditions")
+        if conditions is not None:
+            _apply_condition_patches(conditions, cond_patches)
+
+
 # ── Overrides ─────────────────────────────────────────────────────────────────
 
 def apply_overrides(
@@ -135,19 +285,16 @@ def apply_overrides(
                 if node is None:
                     continue
 
-                # Auto-set recolor to true when color is overridden
                 if field == "color":
                     recolor_node = rule.find("recolor")
                     if recolor_node is not None:
                         recolor_node.text = "true"
 
-                # Auto-set BeamOverride to true when beam fields are touched
                 if field in ("BeamSizeOverride", "BeamColorOverride"):
                     beam_node = rule.find("BeamOverride")
                     if beam_node is not None:
                         beam_node.text = "true"
 
-                # Serialize value to XML text
                 if isinstance(value, bool):
                     node.text = "true" if value else "false"
                 else:
@@ -327,6 +474,7 @@ def main():
     unmatched_cfg = config.get("unmatched_build_rules", {"placement": "after", "after": None})
     ignore_cfg = config.get("ignore_build_rules", [])
     overrides_cfg = config.get("overrides", [])
+    transforms_cfg = config.get("transforms", [])
 
     # ── Load core
     if not os.path.exists(args.core):
@@ -361,6 +509,11 @@ def main():
         print(f"  {len(brules)} build-specific rules remaining")
         build_data.append((bname, brules))
         build_names.append(bname)
+
+    # ── Apply transforms (mutate / derive) before section assignment
+    if transforms_cfg:
+        print("\nApplying transforms...")
+        apply_transforms(build_data, transforms_cfg)
 
     # ── Build output name
     name_template = output_cfg.get("name_template", "All Builds - {builds}")

@@ -1,68 +1,64 @@
-# Technical Reference — Last Epoch Filter Merge Script
+# Technical Reference — Last Epoch Filter Merger
 
-This document covers the internals of `merge_filters.py` and the full `config.yaml` schema. For basic usage instructions, see [README.md](README.md).
-
----
-
-## Architecture Overview
-
-```
-merge_filters.py
-│
-├── parse_filter(path)             XML → list of <Rule> elements
-├── get_name(rule) / set_name()    Read/write rule nameOverride field
-├── set_order(rule, n)             Write the Order field on a rule element
-├── matches(name, pattern, mode)   Pattern matching (exact/startswith/contains)
-│
-├── build_core_name_set(rules)     Build dedup index from core rule names
-├── strip_core_rules(rules, set)   Remove build rules whose names are in the core set
-├── strip_ignored_rules(rules, cfg) Remove rules matching ignore_build_rules entries
-├── apply_overrides(rules, cfg)    Apply field mutations from overrides config
-│
-├── assign_rules_to_sections(…)    Main merge: map rules → ordered sections
-├── build_output_xml(…)            Generate final XML; assign sequential Order values
-└── main()                         CLI entry point (argparse)
-```
-
-**Dependencies:** Python 3.10+, PyYAML. No other third-party libraries.
+For basic setup and usage, see [README.md](README.md). This document covers the config schema in full and explains how the script processes rules internally.
 
 ---
 
 ## Processing Pipeline
 
-### 1. Load Core
+```
+1. Load Core.xml              → index all rule names for dedup
+2. Load each build file       → strip core duplicates, drop ignored rules
+3. Apply transforms           → mutate or derive rules before placement
+4. Assign sections            → place rules into config-ordered slots
+5. Flush unmatched            → dump remaining build rules to catch-all position
+6. Apply overrides            → post-placement field mutations
+7. Write output XML           → reassign Order values, serialize
+```
 
-`Core.xml` is parsed and every rule's `nameOverride` value is indexed into a set used for deduplication.
+### 1 — Load Core
 
-### 2. Load Build Files
+Every `nameOverride` in `Core.xml` is lowercased and stored in a set. This set drives deduplication in step 2.
 
-For each `.xml` file in the builds directory:
+### 2 — Load Build Files
 
-1. Parse all `<Rule>` elements.
-2. **Strip core rules** — any rule whose `nameOverride` exactly matches a name in the core index is dropped. This handles raw Maxroll downloads that include shared rules.
-3. **Strip ignored rules** — any rule matching an `ignore_build_rules` entry is dropped.
-4. The build name is read from the root `<n>` tag of the XML, not the filename.
+Build files are loaded in alphabetical order by filename. For each file:
 
-### 3. Assign Rules to Sections
+- All `<Rule>` elements are parsed
+- Rules whose `nameOverride` (lowercased) matches anything in the core set are dropped — this handles raw Maxroll downloads that bundle shared rules alongside build-specific ones
+- Rules matching any `ignore_build_rules` entry are dropped
+- The build's display name comes from the root `<n>` tag; if that tag is empty, the filename stem is used as a fallback
 
-Sections from `config.yaml` are iterated in order. Each section either:
+### 3 — Apply Transforms
 
-- **`source: core`** — finds the first core rule whose name matches the section's pattern. Placed once.
-- **`source: build`** — finds the first matching rule from each build file. All matching rules are grouped together at this position in the output.
+Transforms run before section assignment so the resulting rules are visible to the normal section-matching logic. Two operations are supported:
 
-A rule can only be claimed once. Once a rule is assigned to a section it is removed from the candidate pool.
+**`mutate`** — modifies the matched rule in-place. The original rule is changed directly; no copy is made.
 
-After all sections are processed, any unclaimed build rules are inserted at the position defined by `unmatched_build_rules`.
+**`derive`** — deep-copies the matched rule, applies the patch to the copy, then inserts the copy immediately after the source rule in the build's rule list. The source rule is left unchanged.
 
-### 4. Apply Overrides
+Both support name replacement, top-level field overrides, and condition-level patches (see [Transforms](#transforms) below).
 
-After placement, `overrides` entries are evaluated against every rule in the output. Matching rules have their XML fields mutated in place. Some fields have automatic side-effects (see [Overrides](#overrides)).
+### 4 — Assign Sections
 
-### 5. Generate Output XML
+Sections are processed in YAML order, which maps directly to in-game evaluation priority (first = highest). For each section:
 
-Rules are written in the order they were assigned. `Order` values are reassigned sequentially: the first rule in the list gets `Order = (total_rules - 1)` and the last gets `Order = 0`. Last Epoch evaluates rules from highest `Order` to lowest, so position in the YAML is all that matters.
+- `source: core` — finds the first core rule matching the pattern, places it once
+- `source: build` — finds all matching rules across all builds, groups them together at this position
 
-Filter metadata (`<n>`, `<description>`, `<filterIcon>`, `<filterIconColor>`) is written from the `output` config block. The `{builds}` placeholder in `name_template` is expanded to a comma-separated list of all loaded build names.
+Once a rule is claimed by a section it is removed from the pool and can't be matched again.
+
+### 5 — Flush Unmatched
+
+After all sections are processed, any build rules that weren't claimed are inserted at the position defined by `unmatched_build_rules`. These show up in the console so you can decide whether they need a proper section or should be ignored.
+
+### 6 — Apply Overrides
+
+`overrides` entries run against the completed rule list. Matching rules have their fields mutated in place. Some fields auto-set a companion flag — `color` sets `recolor: true`, `BeamSizeOverride` and `BeamColorOverride` set `BeamOverride: true`.
+
+### 7 — Write Output
+
+Rules are written in assignment order. `Order` values are assigned as `(total - 1 - index)` so the first rule in the list gets the highest `Order` and is evaluated first by the game. Filter metadata comes from the `output` config block.
 
 ---
 
@@ -78,147 +74,232 @@ output:
   filter_icon_color: 0
 ```
 
-| Key | Type | Description |
-| --- | ---- | ----------- |
-| `name_template` | string | Filter name. `{builds}` expands to comma-separated build names read from each XML's `<n>` tag. |
-| `description` | string | Filter description shown in-game. |
-| `filter_icon` | int | Icon ID (matches Last Epoch's internal icon set). |
-| `filter_icon_color` | int | Icon color ID. |
+`{builds}` in `name_template` expands to a comma-separated list of all loaded build names (from each file's `<n>` tag).
 
 ---
 
 ### `sections`
 
-The ordered list of rule slots in the final filter. **YAML list order = in-game evaluation order (top = highest priority).**
-
 ```yaml
 sections:
-  - name: "Section Label"
-    source: core
-    match: "Pattern"
-    match_mode: exact
-    prefix_build_name: false
+  - name: "Wanted Tier 7 - Non Corrupt"
+    source: build
+    match: "Wanted Tier 7 - Non Corrupt"
+    match_mode: contains
+    prefix_build_name: true
 ```
 
-| Key | Type | Required | Default | Description |
-| --- | ---- | -------- | ------- | ----------- |
-| `name` | string | Yes | — | Human-readable label. Also used as the anchor name for `unmatched_build_rules.after`. |
-| `source` | string | Yes | — | `core` or `build` |
-| `match` | string | Yes | — | Pattern matched against `nameOverride` |
-| `match_mode` | string | No | `contains` | `exact`, `startswith`, or `contains` |
-| `prefix_build_name` | bool | No | `true` for build, `false` for core | Prepend `"BuildName - "` to the rule's `nameOverride` in the output |
+| Key | Required | Default | Description |
+| --- | -------- | ------- | ----------- |
+| `name` | Yes | — | Human label. Also used as the anchor for `unmatched_build_rules.after` |
+| `source` | Yes | — | `core` or `build` |
+| `match` | Yes | — | Pattern matched against `nameOverride` (case-insensitive) |
+| `match_mode` | No | `contains` | `exact`, `startswith`, or `contains` |
+| `prefix_build_name` | No | `true` for build sections | Prepend `"BuildName - "` to the rule's name in the output |
 
-#### `source` behavior
-
-| Value | Behavior |
-| ----- | -------- |
-| `core` | Takes the first matching rule from `Core.xml`. Appears once in the output. |
-| `build` | Takes the first matching rule from each build file and groups them together at this position. |
-
-#### `match_mode` behavior
-
-| Value | Behavior |
-| ----- | -------- |
-| `exact` | Case-insensitive full-string equality |
-| `startswith` | Name must begin with the pattern (case-insensitive) |
-| `contains` | Name must contain the pattern anywhere (case-insensitive) |
+**YAML order = in-game evaluation order.** The first section listed is the first rule evaluated by the game.
 
 ---
 
 ### `unmatched_build_rules`
 
-Catch-all for build rules that were not claimed by any section.
-
 ```yaml
 unmatched_build_rules:
   placement: after
-  after: "Section Name"
+  after: "Uniques From Planner 1 LP"
   prefix_build_name: true
 ```
 
-| Key | Type | Description |
-| --- | ---- | ----------- |
-| `placement` | string | Currently only `after` is supported. |
-| `after` | string | The `name` of the section after which unclaimed rules are inserted. |
-| `prefix_build_name` | bool | Prepend build name to each unclaimed rule's `nameOverride`. |
+Any build rule that wasn't claimed by a section ends up here. `after` references the `name` of a section. Build names are prepended when `prefix_build_name` is true.
 
 ---
 
 ### `ignore_build_rules`
 
-Rules matching any entry here are silently dropped from build files during load and will never appear in the output. Uses the same `match` / `match_mode` system as sections.
-
 ```yaml
 ignore_build_rules:
-  - match: "Old Tier 7 Strict"
-    match_mode: startswith
-  - match: "experimental"
-    match_mode: contains
+  - match: "Harbinger's Needle"
+    match_mode: exact
+  - match: ""
+    match_mode: exact
 ```
+
+Rules matching any entry here are silently dropped from build files during load. Same `match` / `match_mode` system as sections. Useful for dropping rules that belong to a different core variant (e.g. a build file made against the Uber Strict core being run against the Very Strict core).
 
 ---
 
 ### `overrides`
 
-Post-placement field mutations. Evaluated against every rule in the final output list after all sections are assigned.
-
 ```yaml
 overrides:
-  - match: "Shatter / Removal"
+  - match: "Shatter / Removal / Important Affixes"
     match_mode: contains
     source: build
     set:
-      color: 9
-      isEnabled: false
-      emphasized: true
-      SoundId: 4
-      MapIconId: 8
-      BeamSizeOverride: VERYLARGE
-      BeamColorOverride: 12
+      isEnabled: "false"
 ```
 
-| Key | Type | Description |
-| --- | ---- | ----------- |
-| `match` | string | Pattern matched against `nameOverride` |
-| `match_mode` | string | `exact`, `startswith`, or `contains` (default) |
-| `source` | string | `core`, `build`, or `any` (default). Scopes which rules are eligible. |
-| `set` | map | Fields to mutate (see table below) |
+| Key | Description |
+| --- | ----------- |
+| `match` | Pattern matched against `nameOverride` |
+| `match_mode` | `exact`, `startswith`, or `contains` (default) |
+| `source` | `core`, `build`, or `any` (default) — scopes which rules are eligible |
+| `set` | Fields to mutate |
 
-#### Overridable fields
+#### Overridable fields and side-effects
 
-| Field | XML type | Side-effects |
-| ----- | -------- | ------------ |
-| `color` | int | Automatically sets `recolor` to `true` |
-| `isEnabled` | bool | — |
-| `emphasized` | bool | — |
-| `SoundId` | int | — |
-| `MapIconId` | int | — |
-| `BeamSizeOverride` | string (`NONE` `SMALL` `MEDIUM` `LARGE` `VERYLARGE`) | Automatically sets `BeamOverride` to `true` |
-| `BeamColorOverride` | int | Automatically sets `BeamOverride` to `true` |
+| Field | Type | Notes |
+| ----- | ---- | ----- |
+| `color` | int | Auto-sets `recolor: true` |
+| `isEnabled` | bool | |
+| `emphasized` | bool | |
+| `SoundId` | int | |
+| `MapIconId` | int | |
+| `BeamSizeOverride` | string | `NONE` `SMALL` `MEDIUM` `LARGE` `VERYLARGE` — auto-sets `BeamOverride: true` |
+| `BeamColorOverride` | int | Auto-sets `BeamOverride: true` |
+
+---
+
+### `transforms`
+
+Transforms generate or modify build rules before they hit the section assignment step. The two operations are `mutate` (edit in-place) and `derive` (copy-and-patch, inserted after the source).
+
+```yaml
+transforms:
+  - match: "Wanted Tier 7 (Can Edit Affixes & Item Type)"
+    match_mode: exact
+    operation: mutate
+    name_replace: "Wanted Tier 7 (Can Edit Affixes & Item Type)"
+    name_with: "Wanted Tier 7 - Non Corrupt (Can Edit Affixes & Item Type)"
+    condition_patches:
+      - type: AffixCondition
+        index: 0
+        set:
+          combinedComparsionValue: "7"
+      - type: RarityCondition
+        inject_xml: >-
+          <Condition xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                     xsi:type="RarityCondition"><rarity>EXALTED</rarity></Condition>
+```
+
+#### Top-level transform keys
+
+| Key | Required | Description |
+| --- | -------- | ----------- |
+| `match` | Yes | Pattern matched against `nameOverride` |
+| `match_mode` | No | `exact`, `startswith`, or `contains` (default) |
+| `operation` | Yes | `mutate` or `derive` |
+| `name_replace` | No | Substring to find in the rule's name |
+| `name_with` | No | Replacement string |
+| `set` | No | Top-level field overrides — same fields as `overrides.set` |
+| `condition_patches` | No | List of patches to apply to the rule's `<conditions>` block |
+
+#### `condition_patches` entries
+
+Each entry targets one `<Condition>` element inside `<conditions>` by type and index.
+
+| Key | Description |
+| --- | ----------- |
+| `type` | Condition type string, e.g. `AffixCondition`, `RarityCondition`, `SubTypeCondition`, `CorruptionCondition` |
+| `index` | Which occurrence to target when multiple conditions share a type (0-based, default `0`) |
+| `set` | Dict of field → value to write on child elements of the target condition |
+| `inject_xml` | Raw XML string of a new `<Condition>` element to append to `<conditions>` |
+| `remove` | `true` to remove the matched condition entirely |
+
+#### The two built-in transform patterns
+
+**Wanted Tier 7 → Wanted Tier 7 - Non Corrupt** (mutate)
+
+Takes the original `Wanted Tier 7` rule from each build file and converts it to a non-corrupt exalted filter. Changes applied:
+
+- `AffixCondition[0].combinedComparsionValue`: `1` → `7`
+- Appends `RarityCondition: EXALTED`
+- Appends `CorruptionCondition: OnlyUncorrupted`
+
+**Wanted Tier 7 - Non Corrupt → Wanted Havoc** (derive)
+
+Creates a disabled sibling rule for Rune of Havoc use. Same affix list as the Wanted Tier 7 rule, but instead of requiring those affixes at tier 7, it uses them as a presence check (has the affix at any tier) and gates on total tier sum to ensure there's room to craft.
+
+Changes applied to the copy:
+
+- Name: `"Wanted Tier 7 - Non Corrupt"` → `"Wanted Havoc"`
+- `AffixCondition[0].advanced`: `true` → `false` (presence check mode, any tier)
+- Injects a second `AffixCondition` with an empty affix list, `comparsionValue: 7`, `combinedComparsionValue: 15`, `advanced: true` — this ensures at least one T7 affix exists while keeping total tier sum low enough to leave crafting room
+- `color`: `7` → `16`
+- `isEnabled`: `false` (disabled by default — enable manually when hunting havoc targets)
+
+---
+
+## Architecture Reference
+
+```
+merge_filters.py
+│
+├── parse_filter(path)                XML → (build_name, [Rule elements])
+├── get_name / set_name / set_order   Read/write nameOverride and Order fields
+├── matches(name, pattern, mode)      Pattern matching (exact/startswith/contains)
+│
+├── build_core_name_set(rules)        Build dedup index from core rule names
+├── strip_core_rules(rules, names)    Drop build rules whose names are in core
+├── strip_ignored_rules(rules, cfg)   Drop rules matching ignore_build_rules
+│
+├── _apply_condition_patches(node, patches)   Patch/inject/remove Condition elements
+├── _patch_rule(rule, ...)            Apply name replace + set fields + condition patches
+├── apply_transforms(build_data, cfg) Run mutate/derive transforms on all builds
+│
+├── apply_overrides(rules, cfg)       Post-placement field mutations
+├── assign_rules_to_sections(…)       Core merge: map rules → ordered section slots
+├── build_output_xml(…)               Reassign Order values, serialize to XML string
+└── main()                            CLI entry (argparse)
+```
+
+**Dependencies:** Python 3.10+, PyYAML. Nothing else.
+
+---
+
+## Console Tags
+
+| Tag | What it means |
+| --- | ------------- |
+| `[WARN]` | A `core` section matched nothing in `Core.xml` — likely a typo in the section's `match` value |
+| `[INFO]` | A `build` section matched nothing in any build file — normal if not all builds share that rule type |
+| `Stripped N core rule(s)` | Rules dropped from a build file because their names were in the core dedup index |
+| `Ignored N rule(s)` | Rules dropped because they matched an `ignore_build_rules` entry |
+| `Transform mutate` | A transform edited a build rule in-place |
+| `Transform derive` | A transform created a new rule as a copy of an existing one |
+
+---
+
+## Extending the Script
+
+**New overridable field** — add a branch in `apply_overrides()` that writes the XML element and any required side-effect flags, following the same pattern as `color` or `BeamSizeOverride`.
+
+**New match mode** — add a branch in `matches()` and update any config documentation that lists `match_mode` options.
+
+**New condition type** — `_apply_condition_patches()` matches conditions by their `xsi:type` attribute. No code changes needed — just use the type string in your config's `condition_patches` entry.
+
+**New transform operation** — add a branch alongside `mutate` / `derive` in `apply_transforms()`.
 
 ---
 
 ## XML Format Notes
 
-### Input files
+Last Epoch filter files are standard UTF-8 XML. The script uses `xml.etree.ElementTree`. A few quirks worth knowing:
 
-Last Epoch filter files are standard UTF-8 XML. The script uses Python's `xml.etree.ElementTree` parser. Relevant elements:
+- `<n>` at the root level is the filter name; `<nameOverride>` inside each `<Rule>` is what you see in the UI
+- `<recolor>` must be `true` for the `<color>` field to take effect — the script sets this automatically via overrides and transforms
+- `<BeamOverride>` must be `true` for beam fields to take effect — same automatic handling
+- `Order` values are reassigned from scratch on every run — the input values don't matter
 
-- `<n>` — filter name (root level = filter name; inside `<Rule>` = `nameOverride`)
-- `<Order>` — integer, higher = evaluated first by the game engine
-- `<recolor>`, `<BeamOverride>` — boolean flags that must be set alongside color/beam fields for them to take effect
-
-### Output file
-
-The script regenerates the XML from scratch rather than patching the input. Structure:
+Output structure:
 
 ```xml
 <?xml version="1.0" encoding="utf-8"?>
 <ItemFilter xmlns:i="http://www.w3.org/2001/XMLSchema-instance">
-  <n>All Builds - Build One, Build Two</n>
+  <n>All Builds - Bladedancer, Runemaster</n>
   <filterIcon>0</filterIcon>
   <filterIconColor>0</filterIconColor>
-  <description>...</description>
+  <description>Merged multi-build filter</description>
   <lastModifiedInVersion>1.4.1.2</lastModifiedInVersion>
   <lootFilterVersion>9</lootFilterVersion>
   <rules>
@@ -228,52 +309,6 @@ The script regenerates the XML from scratch rather than patching the input. Stru
 </ItemFilter>
 ```
 
-`lastModifiedInVersion` and `lootFilterVersion` are copied from the first build file's XML. Order values are reassigned as `(total - 1 - index)` so index 0 → highest priority.
-
 ---
 
-## Console Output Reference
-
-```
-Loading core: Core.xml
-  26 core rules loaded
-Loading build: Lightning Blast Runemaster.xml
-  38 rules before stripping
-    Stripped 26 core rule(s): ['All Items', 'Important Runes', ...]
-  12 build-specific rules remaining
-
-Assigning rules to sections...
-  [INFO] Build section 'Strict - Weaver Idols' matched no rules in any build
-
-Total rules in merged filter: 87
-
-── Final rule order (highest priority first) ──
-   86  All Items
-   ...
-    0  S Tier & Extremely Rare Uniques
-
-Merged filter written to: merged_filter.xml
-```
-
-| Tag | Meaning |
-| --- | ------- |
-| `[WARN]` | A `core` section matched nothing in `Core.xml` — likely a typo in `config.yaml` |
-| `[INFO]` | A `build` section matched nothing in any build file — normal if not all builds share that rule type |
-| `Stripped N core rule(s)` | Rules dropped from a build file because their names matched the core dedup index |
-| `Ignored` | Rules dropped because they matched an `ignore_build_rules` entry |
-
----
-
-## Extending the Script
-
-### Adding a new overridable field
-
-In `apply_overrides()`, add a branch to the `set` key handler that writes the new XML element and any required side-effect flags, following the same pattern as existing fields.
-
-### Adding a new match mode
-
-In `matches()`, add a new branch for the mode string. Update all config sections that accept `match_mode` to document the new option.
-
-### Adding a new section source type
-
-In `assign_rules_to_sections()`, add handling for the new source value alongside the existing `core` / `build` branches.
+*This project was developed with AI assistance.*

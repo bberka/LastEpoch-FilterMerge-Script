@@ -192,17 +192,17 @@ sections:
   match: "Generic Havoc (Can Edit Item Type)"
   match_mode: exact
 
-# ── WANTED EXPERIMENTALS (per-build) ───────────────────────────────────────
-- name: "Wanted Experimental & Tier 7"
-  source: build
-  match: "Wanted Experimental"
-  match_mode: contains
-  prefix_build_name: true
-
 # ── BUILD-SPECIFIC WANTED HAVOC (derived, disabled by default) ─────────────
 - name: "Wanted Havoc"
   source: build
   match: "Wanted Havoc"
+  match_mode: contains
+  prefix_build_name: true
+
+# ── WANTED EXPERIMENTALS (per-build) ───────────────────────────────────────
+- name: "Wanted Experimental & Tier 7"
+  source: build
+  match: "Wanted Experimental"
   match_mode: contains
   prefix_build_name: true
 

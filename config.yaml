@@ -84,6 +84,36 @@ transforms:
         <advanced>true</advanced>
       </Condition>
 
+# Add non-corrupt to shatter rules
+- match: "Shatter / Removal / Important Affixes"
+  match_mode: contains
+  operation: mutate
+  condition_patches:
+  - type: CorruptionCondition
+    inject_xml: >-
+      <Condition xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                 xsi:type="CorruptionCondition"><Corruption>OnlyUncorrupted</Corruption></Condition>
+
+- match: "Wanted Tier 6 (Can Edit Affixes & Item Type)"
+  match_mode: exact
+  operation: mutate
+  name_replace: "Wanted Tier 6 (Can Edit Affixes & Item Type)"
+  name_with: "Wanted Tier 6 - Non Corrupt (Can Edit Affixes & Item Type)"
+  condition_patches:
+  - type: AffixCondition
+    index: 0
+    set:
+      combinedComparsionValue: "7"
+  - type: RarityCondition
+    inject_xml: >-
+      <Condition xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                 xsi:type="RarityCondition"><rarity>EXALTED</rarity></Condition>
+  - type: CorruptionCondition
+    inject_xml: "<Condition xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\"
+
+      \           xsi:type=\"CorruptionCondition\"><Corruption>OnlyUncorrupted</Corruption></Condition>
+
+      \           "
 sections:
 
 # ── TOP: HIDE-ALL CATCH ────────────────────────────────────────────────────
@@ -123,6 +153,61 @@ sections:
   source: core
   match: "Reflect Idols (Alt Leveling)"
   match_mode: exact
+
+# ── BUILD-SPECIFIC STRICT IDOLS ───────────────────────────────────────────
+- name: "1 Affix - Small Idols"
+  source: build
+  match: "1 Affix - Small Idols"
+  match_mode: exact
+  prefix_build_name: true
+
+- name: "1 Affix - Minor Idols"
+  source: build
+  match: "1 Affix - Minor Idols"
+  match_mode: exact
+  prefix_build_name: true
+
+- name: "1 Affix - Humble Idols"
+  source: build
+  match: "1 Affix - Humble Idols"
+  match_mode: exact
+  prefix_build_name: true
+
+- name: "1 Affix - Stout Idols"
+  source: build
+  match: "1 Affix - Stout Idols"
+  match_mode: exact
+  prefix_build_name: true
+
+- name: "1 Affix - Grand Idols"
+  source: build
+  match: "1 Affix - Grand Idols"
+  match_mode: exact
+  prefix_build_name: true
+
+- name: "1 Affix - Large Idols"
+  source: build
+  match: "1 Affix - Large Idols"
+  match_mode: exact
+  prefix_build_name: true
+
+- name: "1 Affix - Huge Idols"
+  source: build
+  match: "1 Affix - Huge Idols"
+  match_mode: exact
+  prefix_build_name: true
+
+- name: "1 Affix - Adorned Idols"
+  source: build
+  match: "1 Affix - Adorned Idols"
+  match_mode: exact
+  prefix_build_name: true
+
+- name: "1 Affix - Ornate Idols"
+  source: build
+  match: "1 Affix - Ornate Idols"
+  match_mode: exact
+  prefix_build_name: true
 
 # ── BUILD-SPECIFIC STRICT IDOLS ───────────────────────────────────────────
 - name: "Strict - Small Idols"
@@ -186,6 +271,22 @@ sections:
   match_mode: contains
   prefix_build_name: true
 
+# ── CORE TIER 7 SPECIFIC BASES ─────────────────────────────────────────────
+- name: "Tier 7 Best Base Belts"
+  source: core
+  match: "Tier 7 Best Base Belts"
+  match_mode: exact
+
+- name: "Tier 7 Eternal Gauntlets"
+  source: core
+  match: "Tier 7 Eternal Gauntlets"
+  match_mode: exact
+
+- name: "Tier 7 Rings & Amulets"
+  source: core
+  match: "Tier 7 Rings & Amulets"
+  match_mode: exact
+
 # ── GENERIC HAVOC (custom core rule — present in both VS and Uber) ─────────
 - name: "Generic Havoc (Can Edit Item Type)"
   source: core
@@ -206,6 +307,18 @@ sections:
   match_mode: contains
   prefix_build_name: true
 
+- name: "Wanted Tier 6 - Non Corrupt"
+  source: build
+  match: "Wanted Tier 6 - Non Corrupt"
+  match_mode: contains
+  prefix_build_name: true
+
+- name: "Tier 6 Strict (build-specific)"
+  source: build
+  match: "Tier 6 Strict"
+  match_mode: startswith
+  prefix_build_name: true
+
 # ── BUILD-SPECIFIC WANTED TIER 7 - NON CORRUPT (mutated from Wanted Tier 7) ─
 - name: "Wanted Tier 7 - Non Corrupt"
   source: build
@@ -220,22 +333,6 @@ sections:
   match: "Tier 7 Strict"
   match_mode: startswith
   prefix_build_name: true
-
-# ── CORE TIER 7 SPECIFIC BASES ─────────────────────────────────────────────
-- name: "Tier 7 Best Base Belts"
-  source: core
-  match: "Tier 7 Best Base Belts"
-  match_mode: exact
-
-- name: "Tier 7 Eternal Gauntlets"
-  source: core
-  match: "Tier 7 Eternal Gauntlets"
-  match_mode: exact
-
-- name: "Tier 7 Rings & Amulets"
-  source: core
-  match: "Tier 7 Rings & Amulets"
-  match_mode: exact
 
 # ── CORE ITEM CATCH-ALLS (VS only — absent in Uber Strict, skipped silently) ─
 - name: "All Set Items"
@@ -416,3 +513,9 @@ overrides:
   source: build
   set:
     isEnabled: "false"
+
+- match: "Wanted Tier 7"
+  match_mode: contains
+  source: build
+  set:
+    isEnabled: true

@@ -8,7 +8,7 @@ For basic setup and usage, see [README.md](README.md). This document covers the 
 
 ```
 1. Load Core.xml              → index all rule names for dedup
-2. Load each build file       → strip core duplicates, drop ignored rules
+2. Load filters              → strip core duplicates, drop ignored rules
 3. Apply transforms           → mutate or derive rules before placement
 4. Assign sections            → place rules into config-ordered slots
 5. Flush unmatched            → dump remaining build rules to catch-all position
@@ -20,13 +20,15 @@ For basic setup and usage, see [README.md](README.md). This document covers the 
 
 Every `nameOverride` in `Core.xml` is lowercased and stored in a set. This set drives deduplication in step 2.
 
-### 2 — Load Build Files
+### 2 — Load Filters
+
+Core is loaded first so its rule names can still drive build deduplication even if some core rules are later ignored by config.
 
 Build files are loaded in alphabetical order by filename. For each file:
 
 - All `<Rule>` elements are parsed
 - Rules whose `nameOverride` (lowercased) matches anything in the core set are dropped — this handles raw Maxroll downloads that bundle shared rules alongside build-specific ones
-- Rules matching any `ignore_build_rules` entry are dropped
+- `ignore_rules` entries are applied to both core and build rules, filtered by each entry's `source`
 - The build's display name comes from the root `<n>` tag; if that tag is empty, the filename stem is used as a fallback
 
 ### 3 — Apply Transforms
@@ -95,7 +97,7 @@ sections:
 | `source` | Yes | — | `core` or `build` |
 | `match` | Yes | — | Pattern matched against `nameOverride` (case-insensitive) |
 | `match_mode` | No | `contains` | `exact`, `startswith`, or `contains` |
-| `prefix_build_name` | No | `true` for build sections | Prepend `"BuildName - "` to the rule's name in the output |
+| `prefix_build_name` | No | `true` for build sections | When `true`, keep one copy per build and prepend `"BuildName - "`. When `false`, take the first matching build rule once with no prefix and discard duplicate matches from other builds |
 
 **YAML order = in-game evaluation order.** The first section listed is the first rule evaluated by the game.
 
@@ -114,17 +116,27 @@ Any build rule that wasn't claimed by a section ends up here. `after` references
 
 ---
 
-### `ignore_build_rules`
+### `ignore_rules`
 
 ```yaml
-ignore_build_rules:
+ignore_rules:
   - match: "Harbinger's Needle"
     match_mode: exact
+    source: core
   - match: ""
     match_mode: exact
+    source: build
 ```
 
-Rules matching any entry here are silently dropped from build files during load. Same `match` / `match_mode` system as sections. Useful for dropping rules that belong to a different core variant (e.g. a build file made against the Uber Strict core being run against the Very Strict core).
+Rules matching any entry here are silently dropped during load. Same `match` / `match_mode` system as sections.
+
+| Key | Description |
+| --- | ----------- |
+| `match` | Pattern matched against `nameOverride` |
+| `match_mode` | `exact`, `startswith`, or `contains` (default) |
+| `source` | `core`, `build`, or `any` |
+
+`source` lets one config suppress rules from the shared core, the build files, or both. This is useful when multiple strictness profiles reuse the same core XML but need different subsets of rules.
 
 ---
 
@@ -241,7 +253,7 @@ merge_filters.py
 │
 ├── build_core_name_set(rules)        Build dedup index from core rule names
 ├── strip_core_rules(rules, names)    Drop build rules whose names are in core
-├── strip_ignored_rules(rules, cfg)   Drop rules matching ignore_build_rules
+├── strip_ignored_rules(rules, cfg)   Drop rules matching ignore_rules
 │
 ├── _apply_condition_patches(node, patches)   Patch/inject/remove Condition elements
 ├── _patch_rule(rule, ...)            Apply name replace + set fields + condition patches
@@ -264,7 +276,7 @@ merge_filters.py
 | `[WARN]` | A `core` section matched nothing in `Core.xml` — likely a typo in the section's `match` value |
 | `[INFO]` | A `build` section matched nothing in any build file — normal if not all builds share that rule type |
 | `Stripped N core rule(s)` | Rules dropped from a build file because their names were in the core dedup index |
-| `Ignored N rule(s)` | Rules dropped because they matched an `ignore_build_rules` entry |
+| `Ignored N core/build rule(s)` | Rules dropped because they matched an `ignore_rules` entry |
 | `Transform mutate` | A transform edited a build rule in-place |
 | `Transform derive` | A transform created a new rule as a copy of an existing one |
 

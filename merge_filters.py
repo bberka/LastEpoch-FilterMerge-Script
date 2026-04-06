@@ -109,15 +109,19 @@ def strip_core_rules(build_rules: list[ET.Element], core_names: set[str]) -> lis
 
 
 def strip_ignored_rules(
-    build_rules: list[ET.Element],
+    rules: list[ET.Element],
     ignore_cfg: list[dict],
+    rule_source: str,  # "core" or "build"
 ) -> list[ET.Element]:
-    """Drop any build rule whose name matches an ignore entry."""
+    """Drop any rule whose name matches an ignore entry for this source."""
     kept, removed = [], []
-    for r in build_rules:
+    for r in rules:
         name = get_name(r)
         ignored = any(
-            matches(name, entry.get("match", ""), entry.get("match_mode", "contains"))
+            (
+                entry.get("source", "build") in ("any", rule_source)
+                and matches(name, entry.get("match", ""), entry.get("match_mode", "contains"))
+            )
             for entry in ignore_cfg
         )
         if ignored:
@@ -125,7 +129,7 @@ def strip_ignored_rules(
         else:
             kept.append(r)
     if removed:
-        print(f"    Ignored {len(removed)} rule(s): {removed}")
+        print(f"    Ignored {len(removed)} {rule_source} rule(s): {removed}")
     return kept
 
 
@@ -335,20 +339,31 @@ def assign_rules_to_sections(
         (bname, list(rules)) for bname, rules in build_data
     ]
 
-    def claim_build_rules(pattern: str, mode: str) -> list[tuple[str, ET.Element]]:
+    def claim_build_rules(
+        pattern: str,
+        mode: str,
+        first_only: bool = False,
+    ) -> list[tuple[str, ET.Element]]:
         """
         For each build, find and remove all rules matching pattern/mode.
         Returns list of (build_name, rule_element) in build order.
         """
         claimed = []
+        first_claim = None
         for bname, rules in unclaimed:
             to_remove = []
             for r in rules:
                 if matches(get_name(r), pattern, mode):
-                    claimed.append((bname, r))
+                    if first_only:
+                        if first_claim is None:
+                            first_claim = (bname, r)
+                    else:
+                        claimed.append((bname, r))
                     to_remove.append(r)
             for r in to_remove:
                 rules.remove(r)
+        if first_only and first_claim is not None:
+            claimed.append(first_claim)
         return claimed
 
     result: list[ET.Element] = []
@@ -377,6 +392,7 @@ def assign_rules_to_sections(
         mode = section.get("match_mode", "contains")
         prefix = section.get("prefix_build_name", True)
         sname = section["name"]
+        use_config_name = section.get("use_config_name", False)
 
         if src == "core":
             matched = None
@@ -386,21 +402,28 @@ def assign_rules_to_sections(
                     break
             if matched is not None:
                 rc = copy.deepcopy(matched)
+                if use_config_name:
+                    set_name(rc, sname)
                 apply_overrides([rc], overrides_cfg, "core")
                 result.append(rc)
             else:
                 print(f"  [WARN] Core section '{sname}' matched no rule (pattern='{pattern}')")
 
         elif src == "build":
-            claimed = claim_build_rules(pattern, mode)
+            claimed = claim_build_rules(pattern, mode, first_only=not prefix)
             if not claimed:
                 print(f"  [INFO] Build section '{sname}' matched no rules in any build")
             for bname, r in claimed:
                 rc = copy.deepcopy(r)
+                if use_config_name:
+                    base_name = sname
+                else:
+                    base_name = get_name(rc)
                 if prefix:
-                    original_name = get_name(rc)
-                    if not original_name.startswith(bname):
-                        set_name(rc, f"{bname} - {original_name}")
+                    if not base_name.startswith(bname):
+                        set_name(rc, f"{bname} - {base_name}")
+                elif use_config_name:
+                    set_name(rc, base_name)
                 apply_overrides([rc], overrides_cfg, "build")
                 result.append(rc)
 
@@ -479,7 +502,9 @@ def main():
     sections = config.get("sections", [])
     output_cfg = config.get("output", {})
     unmatched_cfg = config.get("unmatched_build_rules", {"placement": "after", "after": None})
-    ignore_cfg = config.get("ignore_build_rules", [])
+    ignore_cfg = config.get("ignore_rules")
+    if ignore_cfg is None:
+        ignore_cfg = config.get("ignore_build_rules", [])
     overrides_cfg = config.get("overrides", [])
     transforms_cfg = config.get("transforms", [])
 
@@ -491,6 +516,8 @@ def main():
     _, core_rules = parse_filter(args.core)
     print(f"  {len(core_rules)} core rules loaded")
     core_names = build_core_name_set(core_rules)
+    core_rules = strip_ignored_rules(core_rules, ignore_cfg, "core")
+    print(f"  {len(core_rules)} core rules remaining after ignores")
 
     # ── Load build files
     if not os.path.isdir(args.builds):
@@ -512,7 +539,7 @@ def main():
         bname, brules = parse_filter(str(bf))
         print(f"  {len(brules)} rules before stripping")
         brules = strip_core_rules(brules, core_names)
-        brules = strip_ignored_rules(brules, ignore_cfg)
+        brules = strip_ignored_rules(brules, ignore_cfg, "build")
         print(f"  {len(brules)} build-specific rules remaining")
         build_data.append((bname, brules))
         build_names.append(bname)
@@ -534,7 +561,10 @@ def main():
     ordered_rules = assign_rules_to_sections(
         sections, core_rules, build_data, unmatched_cfg, overrides_cfg
     )
-    print(f"\nTotal rules in merged filter: {len(ordered_rules)}")
+    total_rules = len(ordered_rules)
+    print(f"\nTotal rules in merged filter: {total_rules}")
+    if total_rules > 200:
+        print(f"[WARN] Merged filter has {total_rules} rules, which exceeds the 200-rule limit")
 
     # ── Serialize and write
     xml_out = build_output_xml(ordered_rules, filter_name, description, icon, icon_color)

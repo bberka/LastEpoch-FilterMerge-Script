@@ -65,7 +65,7 @@ Then pick it from **Settings → Loot Filter** in-game. If you regenerate the fi
 ## What the Script Actually Does
 
 1. Loads `Core.xml` and indexes every rule name
-2. Loads each build file, strips any rules whose names already appear in core (handles raw Maxroll downloads that bundle shared rules), and drops anything listed in `ignore_build_rules`
+2. Loads each build file, strips any rules whose names already appear in core (handles raw Maxroll downloads that bundle shared rules), then applies `ignore_rules` to both the core pool and build pool based on each entry's `source`
 3. Runs any `transforms` entries — these can mutate existing build rules or generate new sibling rules derived from them (see TECHNICAL.md)
 4. Assigns every rule to its section slot in config order
 5. Any build rules that didn't match a section are placed at the `unmatched_build_rules` position

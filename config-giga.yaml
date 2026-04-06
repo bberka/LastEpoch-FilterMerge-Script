@@ -22,8 +22,6 @@ output:
   filter_icon: 0
   filter_icon_color: 0
 
-# No transforms — Havoc and Redemption rules are authored directly in the build files
-
 sections:
 
 # ── TOP: HIDE-ALL CATCH ────────────────────────────────────────────────────
@@ -57,11 +55,6 @@ sections:
 - name: "Strict - Weaver Idols"
   source: core
   match: "Strict - Weaver Idols"
-  match_mode: exact
-
-- name: "Reflect Idols (Alt Leveling)"
-  source: core
-  match: "Reflect Idols (Alt Leveling)"
   match_mode: exact
 
 # ── VS-ONLY: 1-AFFIX IDOLS (absent in Uber Strict build files) ────────────
@@ -156,25 +149,20 @@ sections:
   match_mode: exact
   prefix_build_name: true
 
-# ── SHATTER / CRAFTING AFFIXES (per-build, disabled by default) ────────────
-- name: "Shatter / Removal / Important Affixes"
-  source: build
-  match: "Shatter / Removal / Important Affixes"
-  match_mode: contains
-  prefix_build_name: true
-
 # ── REDEMPTION RULES (per-build, authored directly in filter) ──────────────
 - name: "Any Tier 7 Suffixes (Rune of Redemption) (Optional: Unselect Item Types)"
   source: build
   match: "Any Tier 7 Suffixes (Rune of Redemption)"
   match_mode: exact
   prefix_build_name: false
+  use_config_name: true
 
 - name: "Any Tier 7 Prefixes (Rune of Redemption) (Optional: Unselect Item Types)"
   source: build
   match: "Any Tier 7 Prefixes (Rune of Redemption)"
   match_mode: exact
   prefix_build_name: false
+  use_config_name: true
 
 # ── OPEN SLOT HAVOC RULES (per-build) ─────────────────────────────────────
 - name: "Open Prefix & Tier 7 (Rune of Havoc) (Optional: Unselect Item Types)"
@@ -182,12 +170,14 @@ sections:
   match: "Open Prefix & Tier 7 (Rune of Havoc)"
   match_mode: exact
   prefix_build_name: false
+  use_config_name: true
 
 - name: "Open Suffix & Tier 7 (Rune of Havoc) (Optional: Unselect Item Types)"
   source: build
   match: "Open Suffix & Tier 7 (Rune of Havoc)"
   match_mode: exact
   prefix_build_name: false
+  use_config_name: true
 
 - name: "Wanted Affix & Tier 7 (Rune of Havoc)"
   source: build
@@ -275,13 +265,6 @@ sections:
   source: core
   match: "Harbinger"
   match_mode: contains
-
-# ── BUILD: EXALTED BASES FOR ALT LEVELING ─────────────────────────────────
-- name: "Exalted Bases for Alt Leveling Setup (T7)"
-  source: build
-  match: "Exalted Bases for Alt Leveling Setup"
-  match_mode: contains
-  prefix_build_name: true
 
 # ── VS-ONLY: WANTED TIER 6 (absent in Uber Strict build files) ────────────
 - name: "Wanted Tier 6"
@@ -383,16 +366,6 @@ sections:
   match: "A Tier & Very Rare Uniques"
   match_mode: exact
 
-- name: "Leveling Uniques Campaign"
-  source: core
-  match: "Leveling Uniques Campaign"
-  match_mode: exact
-
-- name: "Leveling Uniques (Reflect  lvl 35)"
-  source: core
-  match: "Leveling Uniques (Reflect  lvl 35)"
-  match_mode: exact
-
 - name: "Legendary Uniques From Planner (Fail Safe Rule)"
   source: build
   match: "Legendary Uniques From Planner"
@@ -457,13 +430,21 @@ ignore_rules:
 - match: ""
   match_mode: exact
   source: build
-
-overrides:
+- match: "Leveling Uniques Campaign"
+  match_mode: exact
+  source: build
+- match: "Leveling Uniques (Reflect  lvl 35)"
+  match_mode: exact
+  source: build
+- match: "Reflect Idols (Alt Leveling)"
+  match_mode: exact
+  source: build
+- match: "Exalted Bases for Alt Leveling Setup"
+  match_mode: contains
+  source: build
 - match: "Shatter / Removal / Important Affixes"
   match_mode: contains
   source: build
-  set:
-    isEnabled: "false"
 
 transforms:
 - match: "Any Tier 7 Suffixes (Rune of Redemption)"

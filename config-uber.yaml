@@ -164,30 +164,38 @@ sections:
   prefix_build_name: true
 
 # ── REDEMPTION RULES (per-build, authored directly in filter) ──────────────
-- name: "Any Tier 7 Suffixes (Rune of Redemption) (Optional: Unselect Item Types)"
+- name: "Any Tier 7 Suffixes - Merged (Rune of Redemption) (Optional: Unselect Item Types)"
   source: build
   match: "Any Tier 7 Suffixes (Rune of Redemption)"
   match_mode: exact
-  prefix_build_name: true
+  prefix_build_name: false
+  use_config_name: true
+  merge: true
 
-- name: "Any Tier 7 Prefixes (Rune of Redemption) (Optional: Unselect Item Types)"
+- name: "Any Tier 7 Prefixes (Rune of Redemption) - Merged (Optional: Unselect Item Types)"
   source: build
   match: "Any Tier 7 Prefixes (Rune of Redemption)"
   match_mode: exact
-  prefix_build_name: true
+  prefix_build_name: false
+  use_config_name: true
+  merge: true
 
 # ── OPEN SLOT HAVOC RULES (per-build) ─────────────────────────────────────
-- name: "Open Prefix & Tier 7 (Rune of Havoc) (Optional: Unselect Item Types)"
+- name: "Open Prefix & Tier 7 (Rune of Havoc) - Merged (Optional: Unselect Item Types)"
   source: build
   match: "Open Prefix & Tier 7 (Rune of Havoc)"
   match_mode: exact
-  prefix_build_name: true
+  prefix_build_name: false
+  use_config_name: true
+  merge: true
 
-- name: "Open Suffix & Tier 7 (Rune of Havoc) (Optional: Unselect Item Types)"
+- name: "Open Suffix & Tier 7 (Rune of Havoc) - Merged (Optional: Unselect Item Types)"
   source: build
   match: "Open Suffix & Tier 7 (Rune of Havoc)"
   match_mode: exact
-  prefix_build_name: true
+  prefix_build_name: false
+  use_config_name: true
+  merge: true
 
 - name: "Wanted Affix & Tier 7 (Rune of Havoc)"
   source: build

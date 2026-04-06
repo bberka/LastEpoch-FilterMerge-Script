@@ -110,6 +110,8 @@ When `merge: true` is used on a build section, the merger keeps the first matche
 - `UniqueModifiersCondition` → unique union by `<UniqueId>`
 - `RarityCondition` → unique union of rarity tokens
 
+Matching is done by condition type and occurrence order within the rule, but a merge only happens when the rest of that condition's config also matches after removing the mergeable value list. This keeps multiple `AffixCondition` or similar entries from being merged into the wrong slot when their non-merged settings differ.
+
 All other condition fields and top-level rule fields stay as they were on the first matched rule.
 
 ---

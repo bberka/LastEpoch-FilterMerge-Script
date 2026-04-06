@@ -320,6 +320,40 @@ def get_condition_type(condition: ET.Element) -> str:
     return ctype.split("}")[-1] if ctype else ""
 
 
+def _condition_signature(condition: ET.Element) -> str:
+    """
+    Build a comparable signature for mergeable conditions.
+
+    The signature excludes the parts we intentionally union across rules:
+      - AffixCondition.affixes
+      - SubTypeCondition.type
+      - UniqueModifiersCondition.Uniques
+      - RarityCondition.rarity
+
+    This lets us merge by type + order only when the remaining config matches.
+    """
+    clone = copy.deepcopy(condition)
+    ctype = get_condition_type(clone)
+
+    if ctype == "AffixCondition":
+        target = clone.find("affixes")
+        if target is not None:
+            clone.remove(target)
+    elif ctype == "SubTypeCondition":
+        target = clone.find("type")
+        if target is not None:
+            clone.remove(target)
+    elif ctype == "UniqueModifiersCondition":
+        for target in list(clone.findall("Uniques")):
+            clone.remove(target)
+    elif ctype == "RarityCondition":
+        target = clone.find("rarity")
+        if target is not None:
+            clone.remove(target)
+
+    return ET.tostring(clone, encoding="unicode")
+
+
 def _dedupe_preserve_order(values: list[str]) -> list[str]:
     seen = set()
     result = []
@@ -430,12 +464,12 @@ def merge_build_rules(claimed: list[tuple[str, ET.Element]]) -> tuple[str, ET.El
     if merged_conditions is None:
         return first_build, merged_rule
 
-    indexed_conditions: dict[tuple[str, int], ET.Element] = {}
+    indexed_conditions: dict[tuple[str, int], tuple[str, ET.Element]] = {}
     condition_counts: dict[str, int] = {}
     for condition in merged_conditions:
         ctype = get_condition_type(condition)
         idx = condition_counts.get(ctype, 0)
-        indexed_conditions[(ctype, idx)] = condition
+        indexed_conditions[(ctype, idx)] = (_condition_signature(condition), condition)
         condition_counts[ctype] = idx + 1
 
     for _, rule in claimed[1:]:
@@ -449,8 +483,12 @@ def merge_build_rules(claimed: list[tuple[str, ET.Element]]) -> tuple[str, ET.El
             idx = other_counts.get(ctype, 0)
             other_counts[ctype] = idx + 1
 
-            base_condition = indexed_conditions.get((ctype, idx))
-            if base_condition is not None:
+            base_entry = indexed_conditions.get((ctype, idx))
+            if base_entry is None:
+                continue
+
+            base_signature, base_condition = base_entry
+            if base_signature == _condition_signature(other_condition):
                 _merge_supported_condition(base_condition, other_condition)
 
     return first_build, merged_rule

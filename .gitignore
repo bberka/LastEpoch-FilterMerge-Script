@@ -1,1 +1,6 @@
 __pycache__/
+webapp/node_modules/
+webapp/dist/
+webapp/*.tsbuildinfo
+webapp/vite.config.js
+webapp/vite.config.d.ts

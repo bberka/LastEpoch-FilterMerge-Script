@@ -1,0 +1,453 @@
+# Last Epoch Loot Filter Merger - Order Configuration
+#
+# Compatible with:
+#   Core-Very-Strict.xml  (VS core)
+#   Core-Uber-Strict.xml  (Uber core)
+#
+# Build files are the new BinaQc-style filters which already contain Havoc and
+# Redemption rules directly — no transforms are needed.
+#
+# Section order follows the Uber Strict build filter ordering exactly.
+# VS-only rules are included and silently skipped when using the Uber core.
+#
+# VS-only build rules (absent in Uber): 1 Affix idols, Wanted Tier 6,
+#   Tier 6 Strict items, Dungeons/Arena/Rare drop sources, Harbinger Uniques,
+#   Rare/Unique/WW item catch-alls, Corrupted Uniques & Sets From Planner
+#
+# Uber-only core rule: Harbinger's Needle (VS uses "Harbinger Uniques")
+#   → handled via contains "Harbinger" match
+
+output:
+  description: "Merged multi-build filter, contains following builds: {builds}"
+  filter_icon: 0
+  filter_icon_color: 0
+
+sections:
+
+# ── TOP: HIDE-ALL CATCH ────────────────────────────────────────────────────
+- name: "All Items"
+  source: core
+  match: "All Items"
+  match_mode: exact
+
+# ── CURRENCY & UTILITY ─────────────────────────────────────────────────────
+- name: "Important Runes"
+  source: core
+  match: "Important Runes"
+  match_mode: exact
+
+- name: "Important Glyphs"
+  source: core
+  match: "Important Glyphs"
+  match_mode: exact
+
+- name: "Woven Echoes"
+  source: core
+  match: "Woven Echoes"
+  match_mode: exact
+
+- name: "Keys & Currency"
+  source: core
+  match: "Keys & Currency"
+  match_mode: exact
+
+# ── CORE IDOL RULES ────────────────────────────────────────────────────────
+- name: "Strict - Weaver Idols"
+  source: core
+  match: "Strict - Weaver Idols"
+  match_mode: exact
+
+# ── VS-ONLY: 1-AFFIX IDOLS (absent in Uber Strict build files) ────────────
+- name: "1 Affix - Small Idols"
+  source: build
+  match: "1 Affix - Small Idols"
+  match_mode: exact
+  prefix_build_name: true
+
+- name: "1 Affix - Minor Idols"
+  source: build
+  match: "1 Affix - Minor Idols"
+  match_mode: exact
+  prefix_build_name: true
+
+- name: "1 Affix - Humble Idols"
+  source: build
+  match: "1 Affix - Humble Idols"
+  match_mode: exact
+  prefix_build_name: true
+
+- name: "1 Affix - Grand Idols"
+  source: build
+  match: "1 Affix - Grand Idols"
+  match_mode: exact
+  prefix_build_name: true
+
+- name: "1 Affix - Large Idols"
+  source: build
+  match: "1 Affix - Large Idols"
+  match_mode: exact
+  prefix_build_name: true
+
+- name: "1 Affix - Ornate Idols"
+  source: build
+  match: "1 Affix - Ornate Idols"
+  match_mode: exact
+  prefix_build_name: true
+
+# ── BUILD-SPECIFIC STRICT IDOLS (2-affix, present in both variants) ────────
+- name: "Strict - Small Idols"
+  source: build
+  match: "Strict - Small Idols"
+  match_mode: exact
+  prefix_build_name: true
+
+- name: "Strict - Minor Idols"
+  source: build
+  match: "Strict - Minor Idols"
+  match_mode: exact
+  prefix_build_name: true
+
+- name: "Strict - Humble Idols"
+  source: build
+  match: "Strict - Humble Idols"
+  match_mode: exact
+  prefix_build_name: true
+
+- name: "Strict - Stout Idols"
+  source: build
+  match: "Strict - Stout Idols"
+  match_mode: exact
+  prefix_build_name: true
+
+- name: "Strict - Grand Idols"
+  source: build
+  match: "Strict - Grand Idols"
+  match_mode: exact
+  prefix_build_name: true
+
+- name: "Strict - Large Idols"
+  source: build
+  match: "Strict - Large Idols"
+  match_mode: exact
+  prefix_build_name: true
+
+- name: "Strict - Huge Idols"
+  source: build
+  match: "Strict - Huge Idols"
+  match_mode: exact
+  prefix_build_name: true
+
+- name: "Strict - Adorned Idols"
+  source: build
+  match: "Strict - Adorned Idols"
+  match_mode: exact
+  prefix_build_name: true
+
+- name: "Strict - Ornate Idols"
+  source: build
+  match: "Strict - Ornate Idols"
+  match_mode: exact
+  prefix_build_name: true
+
+# ── REDEMPTION RULES (per-build, authored directly in filter) ──────────────
+- name: "Any Tier 7 Suffixes - Merged (Rune of Redemption)"
+  source: build
+  match: "Any Tier 7 Suffixes (Rune of Redemption)"
+  match_mode: exact
+  prefix_build_name: false
+  use_config_name: true
+  merge: true
+
+- name: "Any Tier 7 Prefixes - Merged (Rune of Redemption)"
+  source: build
+  match: "Any Tier 7 Prefixes (Rune of Redemption)"
+  match_mode: exact
+  prefix_build_name: false
+  use_config_name: true
+  merge: true
+
+# ── OPEN SLOT HAVOC RULES (per-build) ─────────────────────────────────────
+- name: "Open Prefix & Tier 7 - Merged (Rune of Havoc)"
+  source: build
+  match: "Open Prefix & Tier 7 (Rune of Havoc)"
+  match_mode: exact
+  prefix_build_name: false
+  use_config_name: true
+  merge: true
+
+- name: "Open Suffix & Tier 7 - Merged (Rune of Havoc)"
+  source: build
+  match: "Open Suffix & Tier 7 (Rune of Havoc)"
+  match_mode: exact
+  prefix_build_name: false
+  use_config_name: true
+  merge: true
+
+- name: "Wanted Affix & Tier 7 - Merged (Rune of Havoc)"
+  source: build
+  match: "Wanted Affix & Tier 7 (Rune of Havoc)"
+  match_mode: exact
+  prefix_build_name: false
+  use_config_name: true
+  merge: true
+
+# ── WANTED EXPERIMENTALS (per-build) ───────────────────────────────────────
+- name: "Wanted Experimental & Tier 7"
+  source: build
+  match: "Wanted Experimental"
+  match_mode: contains
+  prefix_build_name: true
+
+# ── CORE TIER 7 SPECIFIC BASES ─────────────────────────────────────────────
+- name: "Tier 7 Best Base Belts"
+  source: core
+  match: "Tier 7 Best Base Belts"
+  match_mode: exact
+
+- name: "Tier 7 Eternal Gauntlets"
+  source: core
+  match: "Tier 7 Eternal Gauntlets"
+  match_mode: exact
+
+- name: "Tier 7 Rings & Amulets"
+  source: core
+  match: "Tier 7 Rings & Amulets"
+  match_mode: exact
+
+# ── VS-ONLY: SPECIAL ITEM CATCH-ALLS (absent in Uber Strict core) ──────────
+- name: "Rare Set Items"
+  source: core
+  match: "Rare Set Items"
+  match_mode: exact
+
+- name: "Unique Items"
+  source: core
+  match: "Unique Items"
+  match_mode: exact
+
+- name: "Weaver's Will Items"
+  source: core
+  match: "Weaver's Will Items"
+  match_mode: exact
+
+# ── CORE SPECIAL UNIQUES ───────────────────────────────────────────────────
+- name: "Cocooned Uniques"
+  source: core
+  match: "Cocooned Uniques"
+  match_mode: exact
+
+- name: "Primordial Uniques"
+  source: core
+  match: "Primordial Uniques"
+  match_mode: exact
+
+# Both current cores use "All Legendary Items" as the Legendary slot.
+# Older cores used an unnamed rule ("") — included as fallback, skipped silently if absent.
+- name: "All Legendary Items"
+  source: core
+  match: "All Legendary Items"
+  match_mode: exact
+
+- name: "Unnamed core rule (Legendary fallback)"
+  source: core
+  match: ""
+  match_mode: exact
+
+# ── VS-ONLY: UNIQUE IDOLS (absent in Uber Strict) ─────────────────────────
+- name: "Unique Idols"
+  source: core
+  match: "Unique Idols"
+  match_mode: exact
+
+# ── ALTARS ─────────────────────────────────────────────────────────────────
+- name: "Generic Good Altars (Min. Tier 7)"
+  source: core
+  match: "Generic Good Altars (Min. Tier 7)"
+  match_mode: exact
+
+# ── HARBINGER (VS: "Harbinger Uniques" / Uber: "Harbinger's Needle") ───────
+# contains "Harbinger" matches both — only one exists per core variant
+- name: "Harbinger Uniques"
+  source: core
+  match: "Harbinger"
+  match_mode: contains
+
+# ── VS-ONLY: WANTED TIER 6 (absent in Uber Strict build files) ────────────
+- name: "Wanted Tier 6"
+  source: build
+  match: "Wanted Tier 6"
+  match_mode: contains
+  prefix_build_name: true
+
+# ── VS-ONLY: TIER 6 STRICT ITEMS ──────────────────────────────────────────
+- name: "Tier 6 Strict Helmet"
+  source: build
+  match: "Tier 6 Strict Helmet"
+  match_mode: exact
+  prefix_build_name: true
+
+- name: "Tier 6 Strict Idol Altar"
+  source: build
+  match: "Tier 6 Strict Idol Altar"
+  match_mode: exact
+  prefix_build_name: true
+
+# ── BUILD-SPECIFIC WANTED TIER 7 ──────────────────────────────────────────
+- name: "Wanted Tier 7"
+  source: build
+  match: "Wanted Tier 7 (Can Edit"
+  match_mode: contains
+  prefix_build_name: true
+
+# ── BUILD-SPECIFIC STRICT TIER 7 ITEM RULES ───────────────────────────────
+- name: "Tier 7 Strict Helmet"
+  source: build
+  match: "Tier 7 Strict Helmet"
+  match_mode: exact
+  prefix_build_name: true
+
+- name: "Tier 7 Strict Idol Altar"
+  source: build
+  match: "Tier 7 Strict Idol Altar"
+  match_mode: exact
+  prefix_build_name: true
+
+- name: "Tier 7 Strict (other build-specific)"
+  source: build
+  match: "Tier 7 Strict"
+  match_mode: startswith
+  prefix_build_name: true
+
+# ── CORE MULTI-EXALTED RULES ───────────────────────────────────────────────
+- name: "Multi Exalted (Min. Tier 7 & Tier 6)"
+  source: core
+  match: "Multi Exalted (Min. Tier 7 & Tier 6)"
+  match_mode: exact
+
+- name: "Multi Exalted (Min. 2 Tier 7)"
+  source: core
+  match: "Multi Exalted (Min. 2 Tier 7)"
+  match_mode: exact
+
+- name: "Triple+ Exalted (Min. 1 Tier 7)"
+  source: core
+  match: "Triple+ Exalted (Min. 1 Tier 7)"
+  match_mode: exact
+
+- name: "Corrupted Multi Exalted (Min. Tier 7 & Tier 6)"
+  source: core
+  match: "Corrupted Multi Exalted"
+  match_mode: contains
+
+# ── VS-ONLY: DUNGEON / BOSS DROPS (absent in Uber Strict) ─────────────────
+- name: "Dungeons / Arena Uniques"
+  source: core
+  match: "Dungeons / Arena Uniques"
+  match_mode: exact
+
+# ── CORE GLOBAL UNIQUE TIERS ───────────────────────────────────────────────
+- name: "Uniques With 15+ Weaver's Will"
+  source: core
+  match: "Uniques With 15+ Weaver's Will"
+  match_mode: exact
+
+- name: "Uniques With 2 LP (70+ LPL)"
+  source: core
+  match: "Uniques With 2 LP (70+ LPL)"
+  match_mode: exact
+
+# ── VS-ONLY: RARE DROP SOURCES (absent in Uber Strict) ────────────────────
+- name: "Rare Dungeon Drops"
+  source: core
+  match: "Rare Dungeon Drops"
+  match_mode: exact
+
+- name: "Rare Monolith Timeline Boss Drops"
+  source: core
+  match: "Rare Monolith Timeline Boss Drops"
+  match_mode: exact
+
+- name: "A Tier & Very Rare Uniques"
+  source: core
+  match: "A Tier & Very Rare Uniques"
+  match_mode: exact
+
+- name: "Legendary Uniques From Planner (Fail Safe Rule)"
+  source: build
+  match: "Legendary Uniques From Planner"
+  match_mode: startswith
+  prefix_build_name: true
+
+- name: "Uniques & Sets From Planner"
+  source: build
+  match: "Uniques & Sets From Planner"
+  match_mode: startswith
+  prefix_build_name: true
+
+- name: "Corrupted Uniques & Sets From Planner"
+  source: build
+  match: "Corrupted Uniques & Sets From Planner"
+  match_mode: startswith
+  prefix_build_name: true
+
+- name: "Uniques From Planner 1 LP"
+  source: build
+  match: "Uniques From Planner 1 LP"
+  match_mode: startswith
+  prefix_build_name: true
+
+# ── CORE HIGH-LP / HIGH-WW UNIQUES ────────────────────────────────────────
+- name: "Uniques With 19+ Weaver's Will"
+  source: core
+  match: "Uniques With 19+ Weaver's Will"
+  match_mode: exact
+
+- name: "Uniques With 3 LP (25+ LPL)"
+  source: core
+  match: "Uniques With 3 LP (25+ LPL)"
+  match_mode: exact
+
+- name: "Uniques With 22+ Weaver's Will"
+  source: core
+  match: "Uniques With 22+ Weaver's Will"
+  match_mode: exact
+
+- name: "Uniques With 4 LP (All)"
+  source: core
+  match: "Uniques With 4 LP (All)"
+  match_mode: exact
+
+- name: "S Tier & Extremely Rare Uniques"
+  source: core
+  match: "S Tier & Extremely Rare Uniques"
+  match_mode: exact
+
+# Where to insert any build rules that did not match any section above.
+unmatched_build_rules:
+  placement: after
+  after: "Uniques From Planner 1 LP"
+  prefix_build_name: true
+
+# Build XMLs from Maxroll carry copies of core rules.
+# The merger strips these automatically via core-name deduplication.
+# Additionally, suppress empty-nameOverride rules from build files — these are
+# catch-all rules that belong to a specific core variant.
+ignore_rules:
+- match: ""
+  match_mode: exact
+  source: build
+- match: "Leveling Uniques Campaign"
+  match_mode: exact
+  source: build
+- match: "Leveling Uniques (Reflect  lvl 35)"
+  match_mode: exact
+  source: build
+- match: "Reflect Idols (Alt Leveling)"
+  match_mode: exact
+  source: build
+- match: "Exalted Bases for Alt Leveling Setup"
+  match_mode: contains
+  source: build
+- match: "Shatter / Removal / Important Affixes"
+  match_mode: contains
+  source: build

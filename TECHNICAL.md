@@ -99,8 +99,18 @@ sections:
 | `match_mode` | No | `contains` | `exact`, `startswith`, or `contains` |
 | `prefix_build_name` | No | `true` for build sections | When `true`, keep one copy per build and prepend `"BuildName - "`. When `false`, take the first matching build rule once with no prefix and discard duplicate matches from other builds |
 | `use_config_name` | No | `false` | When `true`, export the rule using the section `name` instead of the matched XML rule name. If `prefix_build_name` is also `true`, the output becomes `"BuildName - {section.name}"` |
+| `merge` | No | `false` | Build sections only. When `true`, merge all matched build rules into one output rule by unioning supported condition values |
 
 **YAML order = in-game evaluation order.** The first section listed is the first rule evaluated by the game.
+
+When `merge: true` is used on a build section, the merger keeps the first matched rule as the template and unions supported condition values from every other matched build rule into it. Supported merged condition types are:
+
+- `AffixCondition` → unique union of `<affixes><int>...`
+- `SubTypeCondition` → unique union of `<type><EquipmentType>...`
+- `UniqueModifiersCondition` → unique union by `<UniqueId>`
+- `RarityCondition` → unique union of rarity tokens
+
+All other condition fields and top-level rule fields stay as they were on the first matched rule.
 
 ---
 

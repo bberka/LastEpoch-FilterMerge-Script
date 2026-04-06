@@ -312,6 +312,150 @@ def apply_overrides(
                     node.text = str(value)
 
 
+# ── Build-rule merging ────────────────────────────────────────────────────────
+
+def get_condition_type(condition: ET.Element) -> str:
+    """Return the xsi/i:type of a condition element."""
+    ctype = condition.get(XSI_TYPE, "")
+    return ctype.split("}")[-1] if ctype else ""
+
+
+def _dedupe_preserve_order(values: list[str]) -> list[str]:
+    seen = set()
+    result = []
+    for value in values:
+        if value not in seen:
+            seen.add(value)
+            result.append(value)
+    return result
+
+
+def _merge_affix_condition(base: ET.Element, other: ET.Element) -> None:
+    base_affixes = base.find("affixes")
+    other_affixes = other.find("affixes")
+    if base_affixes is None or other_affixes is None:
+        return
+
+    merged = _dedupe_preserve_order(
+        [node.text.strip() for node in base_affixes.findall("int") if node.text]
+        + [node.text.strip() for node in other_affixes.findall("int") if node.text]
+    )
+
+    for child in list(base_affixes):
+        base_affixes.remove(child)
+    for value in merged:
+        node = ET.SubElement(base_affixes, "int")
+        node.text = value
+
+
+def _merge_subtype_condition(base: ET.Element, other: ET.Element) -> None:
+    base_types = base.find("type")
+    other_types = other.find("type")
+    if base_types is None or other_types is None:
+        return
+
+    merged = _dedupe_preserve_order(
+        [node.text.strip() for node in base_types.findall("EquipmentType") if node.text]
+        + [node.text.strip() for node in other_types.findall("EquipmentType") if node.text]
+    )
+
+    for child in list(base_types):
+        base_types.remove(child)
+    for value in merged:
+        node = ET.SubElement(base_types, "EquipmentType")
+        node.text = value
+
+
+def _merge_unique_modifiers_condition(base: ET.Element, other: ET.Element) -> None:
+    base_entries = base.findall("Uniques")
+    other_entries = other.findall("Uniques")
+
+    seen = set()
+    merged_entries: list[ET.Element] = []
+
+    for entry in base_entries + other_entries:
+        unique_id = (entry.findtext("UniqueId") or "").strip()
+        if not unique_id or unique_id in seen:
+            continue
+        seen.add(unique_id)
+        merged_entries.append(copy.deepcopy(entry))
+
+    for child in list(base):
+        base.remove(child)
+    for entry in merged_entries:
+        base.append(entry)
+
+
+def _merge_rarity_condition(base: ET.Element, other: ET.Element) -> None:
+    base_node = base.find("rarity")
+    other_node = other.find("rarity")
+    if base_node is None or other_node is None:
+        return
+
+    merged = _dedupe_preserve_order(
+        base_node.text.strip().split() if base_node.text else []
+        + (other_node.text.strip().split() if other_node.text else [])
+    )
+    base_node.text = " ".join(merged)
+
+
+def _merge_supported_condition(base: ET.Element, other: ET.Element) -> None:
+    ctype = get_condition_type(base)
+    if ctype == "AffixCondition":
+        _merge_affix_condition(base, other)
+    elif ctype == "SubTypeCondition":
+        _merge_subtype_condition(base, other)
+    elif ctype == "UniqueModifiersCondition":
+        _merge_unique_modifiers_condition(base, other)
+    elif ctype == "RarityCondition":
+        _merge_rarity_condition(base, other)
+
+
+def merge_build_rules(claimed: list[tuple[str, ET.Element]]) -> tuple[str, ET.Element]:
+    """
+    Merge supported condition values from multiple matching build rules into one rule.
+
+    Supported merges:
+      - AffixCondition.affixes/int
+      - SubTypeCondition.type/EquipmentType
+      - UniqueModifiersCondition.Uniques/UniqueId
+      - RarityCondition.rarity
+
+    All other condition fields and top-level rule fields are kept from the first match.
+    """
+    first_build, first_rule = claimed[0]
+    merged_rule = copy.deepcopy(first_rule)
+    merged_conditions = merged_rule.find("conditions")
+
+    if merged_conditions is None:
+        return first_build, merged_rule
+
+    indexed_conditions: dict[tuple[str, int], ET.Element] = {}
+    condition_counts: dict[str, int] = {}
+    for condition in merged_conditions:
+        ctype = get_condition_type(condition)
+        idx = condition_counts.get(ctype, 0)
+        indexed_conditions[(ctype, idx)] = condition
+        condition_counts[ctype] = idx + 1
+
+    for _, rule in claimed[1:]:
+        other_conditions = rule.find("conditions")
+        if other_conditions is None:
+            continue
+
+        other_counts: dict[str, int] = {}
+        for other_condition in other_conditions:
+            ctype = get_condition_type(other_condition)
+            idx = other_counts.get(ctype, 0)
+            other_counts[ctype] = idx + 1
+
+            base_condition = indexed_conditions.get((ctype, idx))
+            if base_condition is not None:
+                _merge_supported_condition(base_condition, other_condition)
+
+    return first_build, merged_rule
+
+
 # ── Section assignment ────────────────────────────────────────────────────────
 
 def assign_rules_to_sections(
@@ -393,6 +537,7 @@ def assign_rules_to_sections(
         prefix = section.get("prefix_build_name", True)
         sname = section["name"]
         use_config_name = section.get("use_config_name", False)
+        merge = section.get("merge", False)
 
         if src == "core":
             matched = None
@@ -410,9 +555,11 @@ def assign_rules_to_sections(
                 print(f"  [WARN] Core section '{sname}' matched no rule (pattern='{pattern}')")
 
         elif src == "build":
-            claimed = claim_build_rules(pattern, mode, first_only=not prefix)
+            claimed = claim_build_rules(pattern, mode, first_only=False if merge else not prefix)
             if not claimed:
                 print(f"  [INFO] Build section '{sname}' matched no rules in any build")
+            if merge and claimed:
+                claimed = [merge_build_rules(claimed)]
             for bname, r in claimed:
                 rc = copy.deepcopy(r)
                 if use_config_name:

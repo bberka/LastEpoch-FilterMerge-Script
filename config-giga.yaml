@@ -179,11 +179,13 @@ sections:
   prefix_build_name: false
   use_config_name: true
 
-- name: "Wanted Affix & Tier 7 (Rune of Havoc)"
+- name: "Wanted Affix & Tier 7 - Merged (Rune of Havoc)"
   source: build
   match: "Wanted Affix & Tier 7 (Rune of Havoc)"
   match_mode: exact
-  prefix_build_name: true
+  prefix_build_name: false
+  use_config_name: true
+  merge: true
 
 # ── WANTED EXPERIMENTALS (per-build) ───────────────────────────────────────
 - name: "Wanted Experimental & Tier 7"

@@ -98,6 +98,7 @@ sections:
 | `match` | Yes | — | Pattern matched against `nameOverride` (case-insensitive) |
 | `match_mode` | No | `contains` | `exact`, `startswith`, or `contains` |
 | `prefix_build_name` | No | `true` for build sections | When `true`, keep one copy per build and prepend `"BuildName - "`. When `false`, take the first matching build rule once with no prefix and discard duplicate matches from other builds |
+| `use_config_name` | No | `false` | When `true`, export the rule using the section `name` instead of the matched XML rule name. If `prefix_build_name` is also `true`, the output becomes `"BuildName - {section.name}"` |
 
 **YAML order = in-game evaluation order.** The first section listed is the first rule evaluated by the game.
 

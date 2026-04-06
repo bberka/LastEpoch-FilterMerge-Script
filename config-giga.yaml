@@ -150,34 +150,38 @@ sections:
   prefix_build_name: true
 
 # ── REDEMPTION RULES (per-build, authored directly in filter) ──────────────
-- name: "Any Tier 7 Suffixes (Rune of Redemption) (Optional: Unselect Item Types)"
+- name: "Any Tier 7 Suffixes - Merged (Rune of Redemption)"
   source: build
   match: "Any Tier 7 Suffixes (Rune of Redemption)"
   match_mode: exact
   prefix_build_name: false
   use_config_name: true
+  merge: true
 
-- name: "Any Tier 7 Prefixes (Rune of Redemption) (Optional: Unselect Item Types)"
+- name: "Any Tier 7 Prefixes - Merged (Rune of Redemption)"
   source: build
   match: "Any Tier 7 Prefixes (Rune of Redemption)"
   match_mode: exact
   prefix_build_name: false
   use_config_name: true
+  merge: true
 
 # ── OPEN SLOT HAVOC RULES (per-build) ─────────────────────────────────────
-- name: "Open Prefix & Tier 7 (Rune of Havoc) (Optional: Unselect Item Types)"
+- name: "Open Prefix & Tier 7 - Merged (Rune of Havoc)"
   source: build
   match: "Open Prefix & Tier 7 (Rune of Havoc)"
   match_mode: exact
   prefix_build_name: false
   use_config_name: true
+  merge: true
 
-- name: "Open Suffix & Tier 7 (Rune of Havoc) (Optional: Unselect Item Types)"
+- name: "Open Suffix & Tier 7 - Merged (Rune of Havoc)"
   source: build
   match: "Open Suffix & Tier 7 (Rune of Havoc)"
   match_mode: exact
   prefix_build_name: false
   use_config_name: true
+  merge: true
 
 - name: "Wanted Affix & Tier 7 - Merged (Rune of Havoc)"
   source: build
@@ -447,44 +451,3 @@ ignore_rules:
 - match: "Shatter / Removal / Important Affixes"
   match_mode: contains
   source: build
-
-transforms:
-- match: "Any Tier 7 Suffixes (Rune of Redemption)"
-  match_mode: exact
-  operation: mutate
-  condition_patches:
-  - type: SubTypeCondition
-    index: 0
-    remove: true
-  - inject_xml: >-
-      <Condition xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:type="SubTypeCondition"><type><EquipmentType>ONE_HANDED_AXE</EquipmentType><EquipmentType>TWO_HANDED_AXE</EquipmentType><EquipmentType>SHIELD</EquipmentType><EquipmentType>HELMET</EquipmentType><EquipmentType>BODY_ARMOR</EquipmentType><EquipmentType>BELT</EquipmentType><EquipmentType>BOOTS</EquipmentType><EquipmentType>GLOVES</EquipmentType><EquipmentType>AMULET</EquipmentType><EquipmentType>RING</EquipmentType><EquipmentType>RELIC</EquipmentType><EquipmentType>TWO_HANDED_MACE</EquipmentType><EquipmentType>TWO_HANDED_SPEAR</EquipmentType><EquipmentType>TWO_HANDED_STAFF</EquipmentType><EquipmentType>TWO_HANDED_SWORD</EquipmentType><EquipmentType>BOW</EquipmentType><EquipmentType>ONE_HANDED_MACES</EquipmentType><EquipmentType>ONE_HANDED_SCEPTRE</EquipmentType><EquipmentType>ONE_HANDED_SWORD</EquipmentType><EquipmentType>WAND</EquipmentType><EquipmentType>ONE_HANDED_DAGGER</EquipmentType><EquipmentType>CATALYST</EquipmentType><EquipmentType>QUIVER</EquipmentType></type><subTypes /></Condition>
-
-- match: "Any Tier 7 Prefixes (Rune of Redemption)"
-  match_mode: exact
-  operation: mutate
-  condition_patches:
-  - type: SubTypeCondition
-    index: 0
-    remove: true
-  - inject_xml: >-
-      <Condition xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:type="SubTypeCondition"><type><EquipmentType>ONE_HANDED_AXE</EquipmentType><EquipmentType>TWO_HANDED_AXE</EquipmentType><EquipmentType>SHIELD</EquipmentType><EquipmentType>HELMET</EquipmentType><EquipmentType>BODY_ARMOR</EquipmentType><EquipmentType>BELT</EquipmentType><EquipmentType>BOOTS</EquipmentType><EquipmentType>GLOVES</EquipmentType><EquipmentType>AMULET</EquipmentType><EquipmentType>RING</EquipmentType><EquipmentType>RELIC</EquipmentType><EquipmentType>TWO_HANDED_MACE</EquipmentType><EquipmentType>TWO_HANDED_SPEAR</EquipmentType><EquipmentType>TWO_HANDED_STAFF</EquipmentType><EquipmentType>TWO_HANDED_SWORD</EquipmentType><EquipmentType>BOW</EquipmentType><EquipmentType>ONE_HANDED_MACES</EquipmentType><EquipmentType>ONE_HANDED_SCEPTRE</EquipmentType><EquipmentType>ONE_HANDED_SWORD</EquipmentType><EquipmentType>WAND</EquipmentType><EquipmentType>ONE_HANDED_DAGGER</EquipmentType><EquipmentType>CATALYST</EquipmentType><EquipmentType>QUIVER</EquipmentType></type><subTypes /></Condition>
-
-- match: "Open Prefix & Tier 7 (Rune of Havoc)"
-  match_mode: exact
-  operation: mutate
-  condition_patches:
-  - type: SubTypeCondition
-    index: 0
-    remove: true
-  - inject_xml: >-
-      <Condition xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:type="SubTypeCondition"><type><EquipmentType>ONE_HANDED_AXE</EquipmentType><EquipmentType>TWO_HANDED_AXE</EquipmentType><EquipmentType>SHIELD</EquipmentType><EquipmentType>HELMET</EquipmentType><EquipmentType>BODY_ARMOR</EquipmentType><EquipmentType>BELT</EquipmentType><EquipmentType>BOOTS</EquipmentType><EquipmentType>GLOVES</EquipmentType><EquipmentType>AMULET</EquipmentType><EquipmentType>RING</EquipmentType><EquipmentType>RELIC</EquipmentType><EquipmentType>TWO_HANDED_MACE</EquipmentType><EquipmentType>TWO_HANDED_SPEAR</EquipmentType><EquipmentType>TWO_HANDED_STAFF</EquipmentType><EquipmentType>TWO_HANDED_SWORD</EquipmentType><EquipmentType>BOW</EquipmentType><EquipmentType>ONE_HANDED_MACES</EquipmentType><EquipmentType>ONE_HANDED_SCEPTRE</EquipmentType><EquipmentType>ONE_HANDED_SWORD</EquipmentType><EquipmentType>WAND</EquipmentType><EquipmentType>ONE_HANDED_DAGGER</EquipmentType><EquipmentType>CATALYST</EquipmentType><EquipmentType>QUIVER</EquipmentType></type><subTypes /></Condition>
-
-- match: "Open Suffix & Tier 7 (Rune of Havoc)"
-  match_mode: exact
-  operation: mutate
-  condition_patches:
-  - type: SubTypeCondition
-    index: 0
-    remove: true
-  - inject_xml: >-
-      <Condition xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:type="SubTypeCondition"><type><EquipmentType>ONE_HANDED_AXE</EquipmentType><EquipmentType>TWO_HANDED_AXE</EquipmentType><EquipmentType>SHIELD</EquipmentType><EquipmentType>HELMET</EquipmentType><EquipmentType>BODY_ARMOR</EquipmentType><EquipmentType>BELT</EquipmentType><EquipmentType>BOOTS</EquipmentType><EquipmentType>GLOVES</EquipmentType><EquipmentType>AMULET</EquipmentType><EquipmentType>RING</EquipmentType><EquipmentType>RELIC</EquipmentType><EquipmentType>TWO_HANDED_MACE</EquipmentType><EquipmentType>TWO_HANDED_SPEAR</EquipmentType><EquipmentType>TWO_HANDED_STAFF</EquipmentType><EquipmentType>TWO_HANDED_SWORD</EquipmentType><EquipmentType>BOW</EquipmentType><EquipmentType>ONE_HANDED_MACES</EquipmentType><EquipmentType>ONE_HANDED_SCEPTRE</EquipmentType><EquipmentType>ONE_HANDED_SWORD</EquipmentType><EquipmentType>WAND</EquipmentType><EquipmentType>ONE_HANDED_DAGGER</EquipmentType><EquipmentType>CATALYST</EquipmentType><EquipmentType>QUIVER</EquipmentType></type><subTypes /></Condition>

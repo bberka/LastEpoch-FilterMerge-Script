@@ -19,6 +19,7 @@ import os
 import sys
 import xml.etree.ElementTree as ET
 from pathlib import Path
+from xml.sax.saxutils import escape
 
 try:
     import yaml
@@ -38,9 +39,15 @@ def parse_filter(path: str) -> tuple[str, list[ET.Element]]:
     """Parse a filter XML and return (build_name, list_of_Rule_elements)."""
     tree = ET.parse(path)
     root = tree.getroot()
-    name = root.findtext("n", default=Path(path).stem).strip()
+    name = Path(path).stem
     rules = root.findall(".//Rule")
     return name, rules
+
+
+def render_template(template: str, build_names: list[str]) -> str:
+    """Expand supported placeholders in output text."""
+    builds = ", ".join(build_names)
+    return template.replace("{builds}", builds).replace("{builds]", builds)
 
 
 def get_name(rule: ET.Element) -> str:
@@ -422,10 +429,10 @@ def build_output_xml(
     lines = [
         '<?xml version="1.0" encoding="utf-8"?>',
         f'<ItemFilter {XMLNS_ATTR}>',
-        f'  <n>{filter_name}</n>',
+        f'  <n>{escape(filter_name)}</n>',
         f'  <filterIcon>{icon}</filterIcon>',
         f'  <filterIconColor>{icon_color}</filterIconColor>',
-        f'  <description>{description}</description>',
+        f'  <description>{escape(description)}</description>',
         f'  <lastModifiedInVersion>1.4.1.2</lastModifiedInVersion>',
         f'  <lootFilterVersion>9</lootFilterVersion>',
         f'  <rules>',
@@ -515,10 +522,10 @@ def main():
         print("\nApplying transforms...")
         apply_transforms(build_data, transforms_cfg)
 
-    # ── Build output name
-    name_template = output_cfg.get("name_template", "All Builds - {builds}")
-    filter_name = name_template.replace("{builds}", ", ".join(build_names))
-    description = output_cfg.get("description", "Merged multi-build filter")
+    # ── Build output metadata
+    filter_name = Path(args.output).stem
+    description_template = output_cfg.get("description", "Merged multi-build filter")
+    description = render_template(description_template, build_names)
     icon = output_cfg.get("filter_icon", 0)
     icon_color = output_cfg.get("filter_icon_color", 0)
 
@@ -535,8 +542,8 @@ def main():
         f.write(xml_out)
     print(f"\nMerged filter written to: {args.output}")
 
-    # ── Print summary
-    print("\n── Final rule order (highest priority first) ──")
+    # Print summary
+    print("\nFinal rule order (highest priority first)")
     for i, r in enumerate(ordered_rules):
         print(f"  {len(ordered_rules) - 1 - i:>3}  {get_name(r)}")
 

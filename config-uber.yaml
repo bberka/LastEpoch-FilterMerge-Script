@@ -18,8 +18,7 @@
 #   → handled via contains "Harbinger" match
 
 output:
-  name_template: "All Builds - {builds}"
-  description: "Merged multi-build filter"
+  description: "Merged multi-build filter, contains following builds: {builds}"
   filter_icon: 0
   filter_icon_color: 0
 
